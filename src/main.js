@@ -150,13 +150,12 @@ async function renderDashboard(root, user) {
           <a class="dashboard-nav__item" data-view="surveys" href="#surveys"><span aria-hidden="true">${dashboardIcon('survey')}</span> Pesquisas</a>
           <a class="dashboard-nav__item" data-view="reports" href="#reports"><span aria-hidden="true">${dashboardIcon('chart')}</span> Relatórios</a>
         </nav>
-        <div class="sidebar-note"><span class="sidebar-note__icon" aria-hidden="true">${dashboardIcon('heart')}</span><strong>Experiência em foco</strong><p>Uma visão simples para transformar cada resposta em melhoria.</p></div>
         <div class="sidebar-profile"><span class="profile-avatar">${escapeHtml(String(user.name || 'A').slice(0, 1).toUpperCase())}</span><div><strong>${escapeHtml(user.name)}</strong><span>Administrador</span></div></div>
       </aside>
       <section class="dashboard-content">
         <header class="dashboard-topbar">
           <div class="mobile-brand"><span class="brand-symbol" aria-hidden="true">${dashboardIcon('spark')}</span><strong>Opina <em>AI</em></strong></div>
-          <div class="topbar-actions"><span class="sync-status"><i aria-hidden="true"></i> Atualizado</span><a class="primary-button" href="/tablet" target="_blank">Abrir modo tablet <span aria-hidden="true">↗</span></a><button id="logout" class="topbar-logout" type="button">Sair</button></div>
+          <div class="topbar-actions"><a class="primary-button" href="/tablet" target="_blank">Abrir modo tablet <span aria-hidden="true">↗</span></a><button id="logout" class="topbar-logout" type="button">Sair</button></div>
         </header>
         <section id="overview" class="dashboard-page-header">
           <div><p class="section-kicker">PAINEL</p><h1 id="page-title">Visão geral</h1><p id="page-subtitle" class="page-subtitle">Acompanhe as avaliações e a operação dos tablets.</p></div>
