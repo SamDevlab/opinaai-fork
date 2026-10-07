@@ -56,6 +56,7 @@ async function api(path, options = {}) {
 }
 
 function renderAdmin(root) {
+  document.body.classList.remove('dashboard-mode');
   root.innerHTML = `
     <section class="login-shell" aria-label="Acesso administrativo Opina AI">
       <div class="brand-panel">
@@ -129,6 +130,7 @@ function renderAdmin(root) {
 }
 
 async function renderDashboard(root, user) {
+  document.body.classList.add('dashboard-mode');
   let selectedTenantId = user.tenantId || '';
   let tenants = [];
   if (user.role === 'SUPERADMIN') tenants = await api('/api/tenants');
