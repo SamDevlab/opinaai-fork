@@ -3,8 +3,10 @@ import express from 'express';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import pg from 'pg';
+import helmet from 'helmet';
+import rateLimit from 'express-rate-limit';
 import path from 'node:path';
-import { createHash, timingSafeEqual } from 'node:crypto';
+import { createHash, randomInt, timingSafeEqual } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import { readdir, readFile } from 'node:fs/promises';
 
@@ -20,8 +22,24 @@ const jwtSecret = process.env.JWT_SECRET || (process.env.NODE_ENV === 'productio
 if (!jwtSecret) throw new Error('JWT_SECRET é obrigatória em produção.');
 
 app.disable('x-powered-by');
-app.use(express.json({ limit: '256kb' }));
+app.use(helmet());
+app.use(express.json({ limit: '64kb' }));
 app.use(express.static(path.join(__dirname, '..', 'dist')));
+
+const loginLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  limit: 10,
+  standardHeaders: 'draft-7',
+  legacyHeaders: false,
+  message: { error: 'too_many_requests' },
+});
+const pairingLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  limit: 30,
+  standardHeaders: 'draft-7',
+  legacyHeaders: false,
+  message: { error: 'too_many_requests' },
+});
 
 function asPositiveInt(value) {
   const parsed = Number(value);
@@ -40,6 +58,75 @@ function sha256(value) {
 function secureHashEqual(left, right) {
   if (!/^[a-f0-9]{64}$/.test(left || '') || !/^[a-f0-9]{64}$/.test(right || '')) return false;
   return timingSafeEqual(Buffer.from(left, 'hex'), Buffer.from(right, 'hex'));
+}
+
+function asyncRoute(handler) {
+  return (req, res, next) => Promise.resolve(handler(req, res, next)).catch(next);
+}
+
+function validateTenantId(value) {
+  return asPositiveInt(value);
+}
+
+async function tenantExists(tenantId) {
+  if (!tenantId) return false;
+  const result = await pool.query('SELECT 1 FROM tenants WHERE id=$1', [tenantId]);
+  return Boolean(result.rowCount);
+}
+
+function canAccessTenant(req, tenantId) {
+  return req.user.role === 'SUPERADMIN' || req.user.tenantId === tenantId;
+}
+
+function parseDateFilter(value) {
+  if (!value) return null;
+  const parsed = String(value).trim();
+  return /^\d{4}-\d{2}-\d{2}$/.test(parsed) ? parsed : null;
+}
+
+function emptyReportMetrics() {
+  return {
+    total: 0,
+    averageScore: null,
+    satisfiedCount: 0,
+    satisfiedRate: 0,
+    neutralCount: 0,
+    neutralRate: 0,
+    dissatisfiedCount: 0,
+    dissatisfiedRate: 0,
+  };
+}
+
+function emptyDistribution() {
+  return [
+    ['1', '😡', 'Péssimo'],
+    ['2', '😕', 'Ruim'],
+    ['3', '😐', 'Regular'],
+    ['4', '🙂', 'Bom'],
+    ['5', '😍', 'Ótimo'],
+  ].map(([value, emoji, label]) => ({ value, emoji, label, count: 0 }));
+}
+
+function normalizeQuestions(input) {
+  const questions = Array.isArray(input) ? input.slice(0, 20) : [];
+  const allowedTypes = new Set(['emoji', 'scale', 'options']);
+  const normalized = questions.map((question, index) => ({
+    id: asPositiveInt(question?.id),
+    text: cleanText(question?.text, 500),
+    type: allowedTypes.has(question?.type) ? question.type : 'emoji',
+    position: index,
+    options: Array.isArray(question?.options)
+      ? question.options.map((item) => cleanText(item, 120)).filter(Boolean).slice(0, 12)
+      : [],
+  }));
+  if (!normalized.length || normalized.some((question) => !question.text || (question.type === 'options' && question.options.length < 2))) {
+    return null;
+  }
+  return normalized;
+}
+
+function generateActivationCode() {
+  return String(randomInt(100000, 1000000));
 }
 
 async function runMigrations() {
@@ -116,7 +203,7 @@ async function deviceAuth(req, res, next) {
     const deviceId = cleanText(req.body?.deviceId || req.query?.deviceId, 80);
     const secret = String(req.headers.authorization || '').replace(/^Bearer\s+/i, '');
     if (!deviceId || !secret) return res.status(401).json({ error: 'device_auth_failed' });
-    const result = await pool.query('SELECT * FROM devices WHERE device_id=$1', [deviceId]);
+    const result = await pool.query('SELECT * FROM devices WHERE device_id=$1 AND active=true', [deviceId]);
     if (!result.rowCount || !secureHashEqual(result.rows[0].device_secret_hash, sha256(secret))) {
       return res.status(401).json({ error: 'device_auth_failed' });
     }
@@ -140,7 +227,7 @@ function requireSuperadmin(req, res) {
   return true;
 }
 
-app.post('/api/auth/login', async (req, res) => {
+app.post('/api/auth/login', loginLimiter, asyncRoute(async (req, res) => {
   const email = cleanText(req.body?.email, 180);
   const password = String(req.body?.password || '');
   if (!email || !password) return res.status(400).json({ error: 'Informe usuário e senha.' });
@@ -155,7 +242,7 @@ app.post('/api/auth/login', async (req, res) => {
     token,
     user: { id: user.id, name: user.name, email: user.email, role: user.role, tenantId: user.tenant_id },
   });
-});
+}));
 
 app.get('/api/me', auth, (req, res) => res.json(req.user));
 
@@ -165,7 +252,7 @@ app.get('/api/tenants', auth, async (req, res) => {
   res.json(result.rows);
 });
 
-app.post('/api/tenants', auth, async (req, res) => {
+app.post('/api/tenants', auth, asyncRoute(async (req, res) => {
   if (!requireSuperadmin(req, res)) return;
   const name = cleanText(req.body?.name, 160);
   const email = cleanText(req.body?.email, 180);
@@ -191,40 +278,43 @@ app.post('/api/tenants', auth, async (req, res) => {
   } finally {
     client.release();
   }
-});
+}));
 
 app.get('/api/surveys', auth, async (req, res) => {
   const requestedTenant = asPositiveInt(req.query.tenantId);
-  if (req.user.role === 'SUPERADMIN' && !requestedTenant) {
-    const result = await pool.query('SELECT * FROM surveys ORDER BY created_at DESC');
-    return res.json(result.rows);
-  }
   const tenantId = tenantForUser(req, requestedTenant);
-  if (!tenantId) return res.json([]);
-  const result = await pool.query('SELECT * FROM surveys WHERE tenant_id=$1 ORDER BY created_at DESC', [tenantId]);
+  const params = [];
+  const where = [];
+  if (tenantId) { params.push(tenantId); where.push(`s.tenant_id=$${params.length}`); }
+  else if (req.user.role !== 'SUPERADMIN') return res.json([]);
+  const result = await pool.query(
+    `SELECT s.*,COUNT(d.id)::int AS assigned_devices
+       FROM surveys s
+       LEFT JOIN devices d ON d.active_survey_id=s.id AND d.active=true
+      ${where.length ? `WHERE ${where.join(' AND ')}` : ''}
+      GROUP BY s.id
+      ORDER BY s.created_at DESC`,
+    params,
+  );
   res.json(result.rows);
 });
+
+app.get('/api/surveys/:id', auth, asyncRoute(async (req, res) => {
+  const surveyId = asPositiveInt(req.params.id);
+  const result = await pool.query('SELECT * FROM surveys WHERE id=$1', [surveyId]);
+  if (!result.rowCount) return res.status(404).json({ error: 'Pesquisa não encontrada.' });
+  if (!canAccessTenant(req, result.rows[0].tenant_id)) return res.sendStatus(403);
+  const questions = await pool.query('SELECT id,text,type,position,options FROM questions WHERE survey_id=$1 ORDER BY position,id', [surveyId]);
+  res.json({ ...result.rows[0], questions: questions.rows });
+}));
 
 app.post('/api/surveys', auth, async (req, res) => {
   const tenantId = tenantForUser(req, req.body?.tenantId);
   const title = cleanText(req.body?.title, 200);
   const description = cleanText(req.body?.description, 1000);
-  const questions = Array.isArray(req.body?.questions) ? req.body.questions.slice(0, 20) : [];
-  if (!tenantId || !title || !questions.length) {
+  const questions = normalizeQuestions(req.body?.questions);
+  if (!tenantId || !(await tenantExists(tenantId)) || !title || !questions) {
     return res.status(400).json({ error: 'Empresa, título e ao menos uma pergunta são obrigatórios.' });
-  }
-
-  const allowedTypes = new Set(['emoji', 'scale', 'options']);
-  const normalizedQuestions = questions.map((question, index) => ({
-    text: cleanText(question?.text, 500),
-    type: allowedTypes.has(question?.type) ? question.type : 'emoji',
-    position: index,
-    options: Array.isArray(question?.options)
-      ? question.options.map((item) => cleanText(item, 120)).filter(Boolean).slice(0, 12)
-      : [],
-  }));
-  if (normalizedQuestions.some((question) => !question.text || (question.type === 'options' && question.options.length < 2))) {
-    return res.status(400).json({ error: 'Revise as perguntas e opções da pesquisa.' });
   }
 
   const client = await pool.connect();
@@ -234,7 +324,7 @@ app.post('/api/surveys', auth, async (req, res) => {
       'INSERT INTO surveys(tenant_id,title,description) VALUES($1,$2,$3) RETURNING *',
       [tenantId, title, description || null],
     );
-    for (const question of normalizedQuestions) {
+    for (const question of questions) {
       await client.query(
         'INSERT INTO questions(survey_id,text,type,position,options) VALUES($1,$2,$3,$4,$5::jsonb)',
         [survey.rows[0].id, question.text, question.type, question.position, JSON.stringify(question.options)],
@@ -250,37 +340,130 @@ app.post('/api/surveys', auth, async (req, res) => {
   }
 });
 
-app.get('/api/reports', auth, async (req, res) => {
-  const tenantId = tenantForUser(req, req.query.tenantId);
-  const from = req.query.from || null;
-  const to = req.query.to || null;
-  const params = [from, to];
-  let tenantClause = '';
-  if (req.user.role !== 'SUPERADMIN' || tenantId) {
-    if (!tenantId) return res.json([]);
-    params.push(tenantId);
-    tenantClause = `AND s.tenant_id=$${params.length}`;
+app.patch('/api/surveys/:id', auth, asyncRoute(async (req, res) => {
+  const surveyId = asPositiveInt(req.params.id);
+  if (!surveyId) return res.status(400).json({ error: 'Pesquisa inválida.' });
+  const existing = await pool.query('SELECT id,tenant_id FROM surveys WHERE id=$1', [surveyId]);
+  if (!existing.rowCount) return res.status(404).json({ error: 'Pesquisa não encontrada.' });
+  const tenantId = existing.rows[0].tenant_id;
+  if (!canAccessTenant(req, tenantId)) return res.sendStatus(403);
+
+  const title = cleanText(req.body?.title, 200);
+  const description = cleanText(req.body?.description, 1000);
+  const questions = req.body?.questions === undefined ? null : normalizeQuestions(req.body.questions);
+  if (req.body?.questions !== undefined && !questions) return res.status(400).json({ error: 'Revise as perguntas e opções da pesquisa.' });
+  if (req.body?.title !== undefined && !title) return res.status(400).json({ error: 'O título é obrigatório.' });
+  const published = req.body?.published === undefined ? null : Boolean(req.body.published);
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    await client.query(
+      `UPDATE surveys
+          SET title=COALESCE($1,title), description=COALESCE($2,description), published=COALESCE($3,published)
+        WHERE id=$4`,
+      [req.body?.title === undefined ? null : title, req.body?.description === undefined ? null : description, published, surveyId],
+    );
+    if (questions) {
+      await client.query('DELETE FROM questions WHERE survey_id=$1', [surveyId]);
+      for (const question of questions) {
+        await client.query(
+          'INSERT INTO questions(survey_id,text,type,position,options) VALUES($1,$2,$3,$4,$5::jsonb)',
+          [surveyId, question.text, question.type, question.position, JSON.stringify(question.options)],
+        );
+      }
+    }
+    await client.query('COMMIT');
+    const updated = await pool.query('SELECT * FROM surveys WHERE id=$1', [surveyId]);
+    res.json(updated.rows[0]);
+  } catch (error) {
+    await client.query('ROLLBACK');
+    throw error;
+  } finally {
+    client.release();
   }
+}));
 
-  const result = await pool.query(
-    `SELECT r.survey_id, s.title AS survey_title, r.device_id, d.name AS device_name,
-            l.name AS location_name, COUNT(*)::int AS total,
-            date_trunc('day',COALESCE(r.answered_at,r.created_at))::date AS day
-       FROM responses r
-       JOIN surveys s ON s.id=r.survey_id
-       LEFT JOIN devices d ON d.id=r.device_id
-       LEFT JOIN locations l ON l.id=r.location_id
-      WHERE COALESCE(r.answered_at,r.created_at) >= COALESCE($1::date, current_date-30)
-        AND COALESCE(r.answered_at,r.created_at) < COALESCE(($2::date + interval '1 day'), current_date+1)
-        ${tenantClause}
-      GROUP BY r.survey_id,s.title,r.device_id,d.name,l.name,day
-      ORDER BY day DESC`,
-    params,
-  );
-  res.json(result.rows);
-});
+app.get('/api/reports', auth, asyncRoute(async (req, res) => {
+  const tenantId = tenantForUser(req, req.query.tenantId);
+  if (tenantId && !(await tenantExists(tenantId))) return res.status(404).json({ error: 'Empresa não encontrada.' });
+  if (req.user.role !== 'SUPERADMIN' && !tenantId) return res.json({ metrics: emptyReportMetrics(), distribution: emptyDistribution(), rows: [] });
 
-app.post('/api/devices/register', async (req, res) => {
+  const from = parseDateFilter(req.query.from);
+  const to = parseDateFilter(req.query.to);
+  const params = [from, to];
+  const filters = [
+    `COALESCE(r.answered_at,r.created_at) >= COALESCE($1::date, current_date-30)`,
+    `COALESCE(r.answered_at,r.created_at) < COALESCE(($2::date + interval '1 day'), current_date+1)`,
+  ];
+  if (tenantId) { params.push(tenantId); filters.push(`s.tenant_id=$${params.length}`); }
+  const surveyId = asPositiveInt(req.query.surveyId);
+  const locationId = asPositiveInt(req.query.locationId);
+  const deviceId = asPositiveInt(req.query.deviceId);
+  if (surveyId) { params.push(surveyId); filters.push(`r.survey_id=$${params.length}`); }
+  if (locationId) { params.push(locationId); filters.push(`r.location_id=$${params.length}`); }
+  if (deviceId) { params.push(deviceId); filters.push(`r.device_id=$${params.length}`); }
+
+  const baseSql = `WITH filtered AS (
+    SELECT r.id,r.survey_id,s.title AS survey_title,r.device_id,d.name AS device_name,
+           r.location_id,l.name AS location_name,
+           date_trunc('day',COALESCE(r.answered_at,r.created_at))::date AS day,
+           fq.type AS question_type,r.answers ->> fq.id::text AS score_text
+      FROM responses r
+      JOIN surveys s ON s.id=r.survey_id
+      LEFT JOIN devices d ON d.id=r.device_id
+      LEFT JOIN locations l ON l.id=r.location_id
+      LEFT JOIN LATERAL (
+        SELECT id,type FROM questions WHERE survey_id=s.id ORDER BY position,id LIMIT 1
+      ) fq ON true
+     WHERE ${filters.join(' AND ')}
+  ), scored AS (
+    SELECT *, CASE WHEN score_text ~ '^(10|[1-9])$' THEN score_text::numeric END AS score
+      FROM filtered
+  )`;
+  const [summary, rows] = await Promise.all([
+    pool.query(`${baseSql}
+      SELECT COUNT(*)::int AS total,
+             ROUND(AVG(score)::numeric,2) AS average_score,
+             COUNT(*) FILTER (WHERE question_type='emoji' AND score BETWEEN 4 AND 5)::int AS satisfied_count,
+             COUNT(*) FILTER (WHERE question_type='emoji' AND score=3)::int AS neutral_count,
+             COUNT(*) FILTER (WHERE question_type='emoji' AND score BETWEEN 1 AND 2)::int AS dissatisfied_count,
+             COUNT(*) FILTER (WHERE question_type='emoji' AND score=1)::int AS very_dissatisfied_count,
+             COUNT(*) FILTER (WHERE question_type='emoji' AND score=2)::int AS dissatisfied_low_count,
+             COUNT(*) FILTER (WHERE question_type='emoji' AND score=3)::int AS neutral_distribution_count,
+             COUNT(*) FILTER (WHERE question_type='emoji' AND score=4)::int AS satisfied_low_count,
+             COUNT(*) FILTER (WHERE question_type='emoji' AND score=5)::int AS satisfied_high_count
+        FROM scored`, params),
+    pool.query(`${baseSql}
+      SELECT survey_id,survey_title,device_id,device_name,location_id,location_name,COUNT(*)::int AS total,day
+        FROM scored
+       GROUP BY survey_id,survey_title,device_id,device_name,location_id,location_name,day
+       ORDER BY day DESC,survey_title`, params),
+  ]);
+
+  const row = summary.rows[0];
+  const total = Number(row.total || 0);
+  const satisfiedCount = Number(row.satisfied_count || 0);
+  const metrics = {
+    total,
+    averageScore: row.average_score === null ? null : Number(row.average_score),
+    satisfiedCount,
+    satisfiedRate: total ? Number(((satisfiedCount / total) * 100).toFixed(1)) : 0,
+    neutralCount: Number(row.neutral_count || 0),
+    neutralRate: total ? Number(((Number(row.neutral_count || 0) / total) * 100).toFixed(1)) : 0,
+    dissatisfiedCount: Number(row.dissatisfied_count || 0),
+    dissatisfiedRate: total ? Number(((Number(row.dissatisfied_count || 0) / total) * 100).toFixed(1)) : 0,
+  };
+  const distribution = [
+    ['1', '😡', 'Péssimo', row.very_dissatisfied_count],
+    ['2', '😕', 'Ruim', row.dissatisfied_low_count],
+    ['3', '😐', 'Regular', row.neutral_distribution_count],
+    ['4', '🙂', 'Bom', row.satisfied_low_count],
+    ['5', '😍', 'Ótimo', row.satisfied_high_count],
+  ].map(([value, emoji, label, count]) => ({ value, emoji, label, count: Number(count || 0) }));
+  res.json({ filters: { tenantId, from, to, surveyId, locationId, deviceId }, metrics, distribution, rows: rows.rows });
+}));
+
+app.post('/api/devices/register', pairingLimiter, asyncRoute(async (req, res) => {
   const deviceId = cleanText(req.body?.deviceId, 80);
   const activationCode = cleanText(req.body?.activationCode, 6);
   const deviceSecretHash = cleanText(req.body?.deviceSecretHash, 64).toLowerCase();
@@ -323,9 +506,9 @@ app.post('/api/devices/register', async (req, res) => {
     if (error.code === '23505') return res.status(409).json({ error: 'activation_code_conflict' });
     throw error;
   }
-});
+}));
 
-app.post('/api/devices/pair', auth, async (req, res) => {
+app.post('/api/devices/pair', pairingLimiter, auth, asyncRoute(async (req, res) => {
   const activationCode = cleanText(req.body?.activationCode, 6);
   const tenantId = tenantForUser(req, req.body?.tenantId);
   const locationName = cleanText(req.body?.locationName || 'Recepção', 160);
@@ -333,6 +516,7 @@ app.post('/api/devices/pair', auth, async (req, res) => {
   if (!tenantId || !/^\d{6}$/.test(activationCode)) {
     return res.status(400).json({ error: 'Empresa e código de pareamento são obrigatórios.' });
   }
+  if (!(await tenantExists(tenantId))) return res.status(404).json({ error: 'Empresa não encontrada.' });
 
   const client = await pool.connect();
   try {
@@ -373,7 +557,7 @@ app.post('/api/devices/pair', auth, async (req, res) => {
   } finally {
     client.release();
   }
-});
+}));
 
 app.get('/api/devices', auth, async (req, res) => {
   const tenantId = tenantForUser(req, req.query.tenantId);
@@ -385,7 +569,7 @@ app.get('/api/devices', auth, async (req, res) => {
     where = 'WHERE d.tenant_id=$1';
   }
   const result = await pool.query(
-    `SELECT d.id,d.device_id,d.name,d.tenant_id,d.active_survey_id,d.app_version,d.last_seen_at,d.paired_at,
+    `SELECT d.id,d.device_id,d.name,d.tenant_id,d.location_id,d.active,d.active_survey_id,d.app_version,d.last_seen_at,d.paired_at,
             l.name AS location_name,s.title AS active_survey_title,
             CASE WHEN d.last_seen_at >= now()-interval '90 seconds' THEN 'online' ELSE 'offline' END AS runtime_status
        FROM devices d
@@ -398,6 +582,89 @@ app.get('/api/devices', auth, async (req, res) => {
   res.json(result.rows);
 });
 
+async function loadManagedDevice(req, res, deviceId) {
+  const result = await pool.query('SELECT id,tenant_id FROM devices WHERE id=$1', [deviceId]);
+  if (!result.rowCount || !result.rows[0].tenant_id) {
+    res.status(404).json({ error: 'Tablet não encontrado.' });
+    return null;
+  }
+  if (!canAccessTenant(req, result.rows[0].tenant_id)) {
+    res.sendStatus(403);
+    return null;
+  }
+  return result.rows[0];
+}
+
+app.patch('/api/devices/:id', auth, asyncRoute(async (req, res) => {
+  const deviceId = asPositiveInt(req.params.id);
+  if (!deviceId) return res.status(400).json({ error: 'Tablet inválido.' });
+  const device = await loadManagedDevice(req, res, deviceId);
+  if (!device) return;
+  const name = req.body?.name === undefined ? null : cleanText(req.body.name, 160);
+  const locationName = req.body?.locationName === undefined ? null : cleanText(req.body.locationName, 160);
+  const active = req.body?.active === undefined ? null : req.body.active === true;
+  if (req.body?.name !== undefined && !name) return res.status(400).json({ error: 'O nome do tablet é obrigatório.' });
+  if (req.body?.locationName !== undefined && !locationName) return res.status(400).json({ error: 'A unidade é obrigatória.' });
+
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    let locationId = null;
+    if (locationName) {
+      const location = await client.query(
+        `INSERT INTO locations(tenant_id,name) VALUES($1,$2)
+         ON CONFLICT (tenant_id,lower(name)) DO UPDATE SET name=EXCLUDED.name
+         RETURNING id`,
+        [device.tenant_id, locationName],
+      );
+      locationId = location.rows[0].id;
+    }
+    await client.query(
+      `UPDATE devices
+          SET name=COALESCE($1,name),location_id=COALESCE($2,location_id),active=COALESCE($3,active),updated_at=now()
+        WHERE id=$4`,
+      [name, locationId, active, deviceId],
+    );
+    await client.query('COMMIT');
+    res.json({ ok: true });
+  } catch (error) {
+    await client.query('ROLLBACK');
+    throw error;
+  } finally {
+    client.release();
+  }
+}));
+
+app.post('/api/devices/:id/remove-survey', auth, asyncRoute(async (req, res) => {
+  const deviceId = asPositiveInt(req.params.id);
+  const device = await loadManagedDevice(req, res, deviceId);
+  if (!device) return;
+  await pool.query('UPDATE devices SET active_survey_id=NULL,updated_at=now() WHERE id=$1', [deviceId]);
+  res.json({ ok: true });
+}));
+
+app.post('/api/devices/:id/unpair', auth, asyncRoute(async (req, res) => {
+  const deviceId = asPositiveInt(req.params.id);
+  const device = await loadManagedDevice(req, res, deviceId);
+  if (!device) return;
+  await pool.query(
+    `UPDATE devices
+        SET tenant_id=NULL,location_id=NULL,active_survey_id=NULL,activation_code=NULL,
+            activation_expires_at=NULL,paired_at=NULL,status='unknown',updated_at=now()
+      WHERE id=$1`,
+    [deviceId],
+  );
+  res.json({ ok: true });
+}));
+
+app.delete('/api/devices/:id', auth, asyncRoute(async (req, res) => {
+  const deviceId = asPositiveInt(req.params.id);
+  const device = await loadManagedDevice(req, res, deviceId);
+  if (!device) return;
+  await pool.query('UPDATE devices SET active=false,active_survey_id=NULL,status=\'offline\',updated_at=now() WHERE id=$1', [deviceId]);
+  res.json({ ok: true, deactivated: true });
+}));
+
 app.post('/api/devices/:id/assign-survey', auth, async (req, res) => {
   const deviceId = asPositiveInt(req.params.id);
   const surveyId = asPositiveInt(req.body?.surveyId);
@@ -406,7 +673,9 @@ app.post('/api/devices/:id/assign-survey', auth, async (req, res) => {
   const device = await pool.query('SELECT id,tenant_id FROM devices WHERE id=$1', [deviceId]);
   if (!device.rowCount || !device.rows[0].tenant_id) return res.status(404).json({ error: 'Tablet não encontrado.' });
   const tenantId = device.rows[0].tenant_id;
-  if (req.user.role !== 'SUPERADMIN' && req.user.tenantId !== tenantId) return res.sendStatus(403);
+  if (!canAccessTenant(req, tenantId)) return res.sendStatus(403);
+  const activeDevice = await pool.query('SELECT active FROM devices WHERE id=$1', [deviceId]);
+  if (!activeDevice.rows[0]?.active) return res.status(409).json({ error: 'Tablet desativado.' });
   const survey = await pool.query('SELECT id FROM surveys WHERE id=$1 AND tenant_id=$2', [surveyId, tenantId]);
   if (!survey.rowCount) return res.status(400).json({ error: 'A pesquisa não pertence à empresa do tablet.' });
 
@@ -428,17 +697,17 @@ app.post('/api/devices/:id/assign-survey', auth, async (req, res) => {
 app.post('/api/devices/heartbeat', deviceAuth, async (req, res) => {
   const appVersion = cleanText(req.body?.appVersion, 40) || 'unknown';
   await pool.query(
-    `UPDATE devices SET status='online',app_version=$1,last_seen_at=now(),updated_at=now() WHERE id=$2`,
+    `UPDATE devices SET status='online',app_version=$1,last_seen_at=now(),updated_at=now() WHERE id=$2 AND active=true`,
     [appVersion, req.device.id],
   );
   res.json({ ok: true });
 });
 
 app.get('/api/devices/config', deviceAuth, async (req, res) => {
-  await pool.query('UPDATE devices SET last_seen_at=now(),updated_at=now() WHERE id=$1', [req.device.id]);
-  if (!req.device.tenant_id) return res.json({ status: 'unpaired', survey: null });
+  await pool.query("UPDATE devices SET status='online',last_seen_at=now(),updated_at=now() WHERE id=$1 AND active=true", [req.device.id]);
+  if (!req.device.tenant_id) return res.json({ status: 'unpaired', deviceId: req.device.device_id, survey: null });
   if (!req.device.active_survey_id) {
-    return res.json({ status: 'paired', deviceId: req.device.id, deviceName: req.device.name, survey: null });
+    return res.json({ status: 'paired', deviceId: req.device.device_id, deviceName: req.device.name, survey: null });
   }
 
   const survey = await pool.query(
@@ -452,7 +721,7 @@ app.get('/api/devices/config', deviceAuth, async (req, res) => {
   );
   res.json({
     status: 'paired',
-    deviceId: req.device.id,
+    deviceId: req.device.device_id,
     deviceName: req.device.name,
     survey: { ...survey.rows[0], questions: questions.rows },
   });
@@ -466,6 +735,9 @@ app.post('/api/devices/responses', deviceAuth, async (req, res) => {
     return res.status(400).json({ error: 'invalid_response' });
   }
   if (!req.device.tenant_id) return res.status(409).json({ error: 'device_not_paired' });
+  if (!req.device.active_survey_id || req.device.active_survey_id !== surveyId) {
+    return res.status(409).json({ error: 'survey_not_assigned_to_device' });
+  }
   const survey = await pool.query(
     'SELECT id FROM surveys WHERE id=$1 AND tenant_id=$2 AND published=true',
     [surveyId, req.device.tenant_id],

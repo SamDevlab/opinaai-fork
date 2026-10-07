@@ -19,6 +19,7 @@ CREATE TABLE IF NOT EXISTS devices (
   activation_expires_at TIMESTAMPTZ,
   name VARCHAR(160) NOT NULL DEFAULT 'Tablet aguardando pareamento',
   status VARCHAR(20) NOT NULL DEFAULT 'unknown' CHECK(status IN ('online','offline','unknown')),
+  active BOOLEAN NOT NULL DEFAULT true,
   app_version VARCHAR(40),
   last_seen_at TIMESTAMPTZ,
   paired_at TIMESTAMPTZ,
@@ -36,6 +37,7 @@ ALTER TABLE responses ADD COLUMN IF NOT EXISTS device_id BIGINT REFERENCES devic
 ALTER TABLE responses ADD COLUMN IF NOT EXISTS location_id INT REFERENCES locations(id) ON DELETE SET NULL;
 ALTER TABLE responses ADD COLUMN IF NOT EXISTS submission_id VARCHAR(80);
 ALTER TABLE responses ADD COLUMN IF NOT EXISTS answered_at TIMESTAMPTZ;
+ALTER TABLE devices ADD COLUMN IF NOT EXISTS active BOOLEAN NOT NULL DEFAULT true;
 CREATE UNIQUE INDEX IF NOT EXISTS responses_submission_id_idx
   ON responses(submission_id)
   WHERE submission_id IS NOT NULL;

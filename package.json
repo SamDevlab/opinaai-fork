@@ -9,13 +9,16 @@
     "dev:full": "concurrently \"npm run server\" \"npm run dev\"",
     "build": "vite build",
     "preview": "vite preview --host 0.0.0.0",
-    "check": "node --check server/index.js && node --check src/main.js && node --check src/tablet.js"
+    "check": "node --check server/index.js && node --check src/main.js && node --check src/tablet.js",
+    "test": "node --test test/integration.test.js"
   },
   "dependencies": {
     "bcryptjs": "^2.4.3",
     "cors": "^2.8.5",
     "dotenv": "^16.4.7",
     "express": "^4.21.2",
+    "express-rate-limit": "^8.7.1",
+    "helmet": "^8.3.0",
     "jsonwebtoken": "^9.0.2",
     "pg": "^8.13.1"
   },
