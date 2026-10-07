@@ -204,11 +204,11 @@ export async function renderTablet(root) {
     root.innerHTML = `<main class="tablet-shell"><section class="tablet-card waiting-card"><p class="tablet-kicker">${escapeHtml(deviceName || 'TABLET PAREADO')}</p><h1>Pronto para receber uma pesquisa</h1><p class="tablet-copy">Assim que uma pesquisa for associada no painel, ela aparecerá aqui automaticamente.</p><div class="waiting-dot" aria-hidden="true"></div></section></main>`;
   }
 
-  function renderSurvey(survey, offline = false) {
+  function renderSurvey(survey) {
     activeSurvey = survey;
     const questions = Array.isArray(survey.questions) ? survey.questions : [];
     const quickSubmit = questions.length === 1;
-    root.innerHTML = `<main class="tablet-shell"><section class="survey-kiosk"><header><p class="tablet-kicker">SUA OPINIÃO IMPORTA</p><h1>${escapeHtml(survey.title)}</h1>${survey.description ? `<p>${escapeHtml(survey.description)}</p>` : ''}${offline ? '<p class="offline-badge" role="status">Modo offline · respostas serão sincronizadas</p>' : ''}</header><form id="kiosk-form" data-quick-submit="${quickSubmit}">${questions.map(renderQuestion).join('')}${quickSubmit ? '' : '<button class="kiosk-submit" type="submit">Enviar avaliação</button>'}</form><footer>Opina AI · Pesquisa de satisfação</footer></section></main>`;
+    root.innerHTML = `<main class="tablet-shell"><section class="survey-kiosk"><header><p class="tablet-kicker">SUA OPINIÃO IMPORTA</p></header><form id="kiosk-form" data-quick-submit="${quickSubmit}">${questions.map(renderQuestion).join('')}${quickSubmit ? '' : '<button class="kiosk-submit" type="submit">Enviar avaliação</button>'}</form><footer>Opina AI · Pesquisa de satisfação</footer></section></main>`;
     const form = root.querySelector('#kiosk-form');
     form.onsubmit = submitSurvey;
     if (quickSubmit) form.addEventListener('change', submitSurvey);
@@ -217,13 +217,13 @@ export async function renderTablet(root) {
   function renderQuestion(question) {
     const name = `q-${question.id}`;
     if (question.type === 'scale') {
-      return `<fieldset class="question"><legend>${escapeHtml(question.text)}</legend><div class="scale-grid">${Array.from({ length: 10 }, (_, index) => index + 1).map((value) => `<label><input type="radio" name="${name}" value="${value}" required><span>${value}</span></label>`).join('')}</div></fieldset>`;
+      return `<fieldset class="question" aria-label="${escapeHtml(question.text)}"><div class="scale-grid">${Array.from({ length: 10 }, (_, index) => index + 1).map((value) => `<label><input type="radio" name="${name}" value="${value}" required><span>${value}</span></label>`).join('')}</div></fieldset>`;
     }
     if (question.type === 'options') {
-      return `<fieldset class="question"><legend>${escapeHtml(question.text)}</legend><div class="option-grid">${(question.options || []).map((option) => `<label><input type="radio" name="${name}" value="${escapeHtml(option)}" required><span>${escapeHtml(option)}</span></label>`).join('')}</div></fieldset>`;
+      return `<fieldset class="question" aria-label="${escapeHtml(question.text)}"><div class="option-grid">${(question.options || []).map((option) => `<label><input type="radio" name="${name}" value="${escapeHtml(option)}" required><span>${escapeHtml(option)}</span></label>`).join('')}</div></fieldset>`;
     }
     const faces = [['1', '😡', 'Péssimo'], ['2', '😕', 'Ruim'], ['3', '😐', 'Regular'], ['4', '🙂', 'Bom'], ['5', '😍', 'Ótimo']];
-    return `<fieldset class="question"><legend>${escapeHtml(question.text)}</legend><div class="emoji-grid">${faces.map(([value, emoji, label]) => `<label><input type="radio" name="${name}" value="${value}" required><span class="emoji-face">${emoji}</span><small>${label}</small></label>`).join('')}</div></fieldset>`;
+    return `<fieldset class="question" aria-label="${escapeHtml(question.text)}"><div class="emoji-grid">${faces.map(([value, emoji, label]) => `<label><input type="radio" name="${name}" value="${value}" required><span class="emoji-face">${emoji}</span><small>${label}</small></label>`).join('')}</div></fieldset>`;
   }
 
   async function submitSurvey(event) {
@@ -306,7 +306,7 @@ export async function renderTablet(root) {
       if (!activeSurvey || activeSurvey.id !== config.survey.id || !root.querySelector('#kiosk-form')) renderSurvey(config.survey);
     } catch {
       const cached = cachedSurvey();
-      if (!activeSurvey && cached) renderSurvey(cached, true);
+      if (!activeSurvey && cached) renderSurvey(cached);
       else if (!activeSurvey) root.innerHTML = '<main class="tablet-shell"><section class="tablet-card"><p class="tablet-kicker">OPINA AI</p><h1>Sem conexão</h1><p class="tablet-copy">A pesquisa anterior ficará disponível assim que o cache local for criado. Tentando novamente...</p></section></main>';
     }
   }
