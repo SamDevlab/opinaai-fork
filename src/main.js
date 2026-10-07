@@ -122,44 +122,45 @@ async function renderDashboard(root, user) {
   const tenantOptions = () => tenants.map((tenant) => `<option value="${tenant.id}" ${String(tenant.id) === String(selectedTenantId) ? 'selected' : ''}>${escapeHtml(tenant.name)}</option>`).join('');
 
   root.innerHTML = `
-    <main class="dashboard">
-      <header class="dashboard-header">
-        <div><p class="eyebrow eyebrow--blue">OPINA AI</p><h2>Painel de satisfação</h2><p>Olá, ${escapeHtml(user.name)}. Gerencie a pesquisa que aparece em cada tablet.</p></div>
-        <div class="dashboard-actions"><a class="outline-button tablet-link" href="/tablet" target="_blank">Abrir modo tablet</a><button id="logout" class="outline-button">Sair</button></div>
-      </header>
-      ${user.role === 'SUPERADMIN' ? `
-        <section class="dashboard-card control-strip">
-          <label>Empresa em foco<select id="tenant-filter">${tenantOptions()}</select></label>
+    <main class="dashboard dashboard-shell">
+      <aside class="dashboard-sidebar">
+        <div class="sidebar-brand"><span class="brand-symbol" aria-hidden="true">✦</span><div><strong>Opina <em>AI</em></strong><small>Painel de satisfação</small></div></div>
+        <p class="sidebar-label">NAVEGAÇÃO</p>
+        <nav class="dashboard-nav" aria-label="Navegação do painel">
+          <a class="dashboard-nav__item is-active" href="#overview"><span aria-hidden="true">⌂</span> Visão geral</a>
+          <a class="dashboard-nav__item" href="#operations"><span aria-hidden="true">＋</span> Ações rápidas</a>
+          <a class="dashboard-nav__item" href="#tablets"><span aria-hidden="true">▣</span> Tablets</a>
+          <a class="dashboard-nav__item" href="#surveys"><span aria-hidden="true">▤</span> Pesquisas</a>
+          <a class="dashboard-nav__item" href="#reports"><span aria-hidden="true">◒</span> Relatórios</a>
+        </nav>
+        <div class="sidebar-note"><span class="sidebar-note__icon" aria-hidden="true">✦</span><strong>Experiência em foco</strong><p>Uma visão simples para transformar cada resposta em melhoria.</p></div>
+        <div class="sidebar-profile"><span class="profile-avatar">${escapeHtml(String(user.name || 'A').slice(0, 1).toUpperCase())}</span><div><strong>${escapeHtml(user.name)}</strong><span>Administrador</span></div></div>
+      </aside>
+      <section class="dashboard-content">
+        <header class="dashboard-topbar">
+          <div class="mobile-brand"><span class="brand-symbol" aria-hidden="true">✦</span><strong>Opina <em>AI</em></strong></div>
+          <div class="topbar-actions"><span class="sync-status"><i aria-hidden="true"></i> Dados atualizados ao abrir</span><a class="primary-button" href="/tablet" target="_blank">Abrir modo tablet <span aria-hidden="true">↗</span></a><button id="logout" class="topbar-logout" type="button">Sair</button></div>
+        </header>
+        <section id="overview" class="dashboard-hero">
+          <div><p class="eyebrow eyebrow--blue">VISÃO GERAL</p><h1>Olá, ${escapeHtml(user.name)} <span aria-hidden="true">👋</span></h1><p>Acompanhe o que seus clientes estão sentindo e mantenha cada tablet pronto para ouvir.</p></div>
+          <div class="hero-illustration" aria-hidden="true"><span>😍</span><span>🙂</span><span>😐</span></div>
         </section>
-        <section class="dashboard-grid">
-          <article class="dashboard-card"><h3>Nova empresa</h3><form id="tenant-form"><label>Nome</label><input name="name" required><label>E-mail do administrador</label><input name="email" type="email" required><label>Senha inicial</label><input name="password" type="password" minlength="8" required><button class="submit-button compact" type="submit">Criar empresa</button><p class="inline-message" id="tenant-message"></p></form></article>
-          <article class="dashboard-card"><h3>Fluxo do tablet</h3><p class="muted-copy">Abra <strong>/tablet</strong> no dispositivo, anote o código de 6 dígitos e faça o pareamento abaixo. Depois associe uma pesquisa ao tablet.</p></article>
-        </section>` : ''}
-      <section class="dashboard-grid">
-        <article class="dashboard-card">
-          <h3>Nova pesquisa</h3>
-          <form id="survey-form">
-            <label>Título</label><input name="title" required placeholder="Ex.: Como foi seu atendimento?">
-            <label>Pergunta</label><input name="question" required placeholder="Como você avalia sua experiência?">
-            <label>Tipo de resposta</label><select name="type"><option value="emoji">5 níveis de satisfação</option><option value="scale">Nota de 1 a 10</option><option value="options">Opções personalizadas</option></select>
-            <label class="options-field is-hidden">Opções separadas por vírgula</label><input class="options-field is-hidden" name="options" placeholder="Ótimo, Bom, Regular, Ruim">
-            <button class="submit-button compact" type="submit">Cadastrar pesquisa</button><p class="inline-message" id="survey-message"></p>
-          </form>
-        </article>
-        <article class="dashboard-card">
-          <h3>Parear tablet</h3>
-          <form id="pair-form">
-            <label>Código exibido no tablet</label><input name="activationCode" inputmode="numeric" maxlength="6" pattern="[0-9]{6}" required placeholder="123456">
-            <label>Nome do tablet</label><input name="deviceName" placeholder="Tablet Recepção">
-            <label>Unidade / local</label><input name="locationName" value="Recepção" required>
-            <button class="submit-button compact" type="submit">Parear dispositivo</button><p class="inline-message" id="pair-message"></p>
-          </form>
-        </article>
-      </section>
-      <section class="dashboard-card"><div class="card-title"><h3>Tablets</h3><span id="device-count">Carregando...</span></div><div id="device-list"></div></section>
-      <section class="dashboard-grid lower-grid">
-        <article class="dashboard-card"><h3>Pesquisas</h3><div id="survey-list">Carregando...</div></article>
-        <article class="dashboard-card report-card"><div class="card-title"><h3>Relatório de satisfação</h3><span id="report-total">Carregando...</span></div><div class="date-row"><label>De <input id="from" type="date"></label><label>Até <input id="to" type="date"></label></div><div class="report-filters"><label>Pesquisa<select id="report-survey"><option value="">Todas</option></select></label><label>Unidade<select id="report-location"><option value="">Todas</option></select></label><label>Tablet<select id="report-device"><option value="">Todos</option></select></label></div><button id="load-report" class="outline-button">Atualizar relatório</button><div id="report-metrics" class="metric-grid"></div><div id="report-distribution" class="distribution-list"></div><div id="report-list"></div></article>
+        ${user.role === 'SUPERADMIN' ? `<section class="tenant-bar"><div><span class="tenant-bar__label">EMPRESA EM FOCO</span><strong>Escolha o espaço que deseja acompanhar</strong></div><select id="tenant-filter" aria-label="Empresa em foco">${tenantOptions()}</select></section>` : ''}
+        <section class="dashboard-section overview-section">
+          <div class="section-heading"><div><p class="section-kicker">RESUMO DO PERÍODO</p><h2>O que está acontecendo</h2></div><span class="section-caption">Visão consolidada das avaliações</span></div>
+          <div id="report-metrics" class="metric-grid overview-metrics"></div>
+        </section>
+        <section id="operations" class="dashboard-section">
+          <div class="section-heading"><div><p class="section-kicker">COMECE POR AQUI</p><h2>Ações rápidas</h2></div><span class="section-caption">Deixe tudo pronto em poucos passos</span></div>
+          <div class="dashboard-grid action-grid">
+            <article class="dashboard-card action-card action-card--survey"><div class="action-card__icon" aria-hidden="true">✦</div><div class="action-card__intro"><h3>Criar uma pesquisa</h3><p>Monte uma pergunta rápida para começar a ouvir seus clientes.</p></div><form id="survey-form" class="form-stack"><div class="form-grid"><label>Título da pesquisa<input name="title" required placeholder="Ex.: Experiência de atendimento"></label><label>Pergunta para o cliente<input name="question" required placeholder="Como você avalia sua experiência?"></label></div><label>Tipo de resposta<select name="type"><option value="emoji">5 níveis de satisfação</option><option value="scale">Nota de 1 a 10</option><option value="options">Opções personalizadas</option></select></label><label class="options-field is-hidden">Opções separadas por vírgula<input class="options-field is-hidden" name="options" placeholder="Ótimo, Bom, Regular, Ruim"></label><div class="form-submit-row"><button class="submit-button compact" type="submit">Cadastrar pesquisa <span aria-hidden="true">→</span></button><p class="inline-message" id="survey-message" role="status"></p></div></form></article>
+            <article class="dashboard-card action-card action-card--pair"><div class="action-card__icon" aria-hidden="true">▣</div><div class="action-card__intro"><h3>Conectar um tablet</h3><p>Abra o modo tablet, informe o código e coloque a pesquisa para rodar.</p></div><form id="pair-form" class="form-stack"><label>Código exibido no tablet<input name="activationCode" inputmode="numeric" maxlength="6" pattern="[0-9]{6}" required placeholder="Ex.: 482913"></label><div class="form-grid"><label>Nome do tablet<input name="deviceName" placeholder="Tablet Recepção"></label><label>Unidade / local<input name="locationName" value="Recepção" required></label></div><div class="form-submit-row"><button class="submit-button compact" type="submit">Parear dispositivo <span aria-hidden="true">→</span></button><p class="inline-message" id="pair-message" role="status"></p></div></form></article>
+          </div>
+        </section>
+        ${user.role === 'SUPERADMIN' ? `<section id="companies" class="dashboard-section admin-tools"><div class="section-heading"><div><p class="section-kicker">ADMINISTRAÇÃO</p><h2>Empresas</h2></div><span class="section-caption">Crie e organize novos espaços</span></div><article class="dashboard-card"><form id="tenant-form" class="form-grid form-grid--tenant"><label>Nome da empresa<input name="name" required></label><label>E-mail do administrador<input name="email" type="email" required></label><label>Senha inicial<input name="password" type="password" minlength="8" required></label><div class="form-submit-row"><button class="submit-button compact" type="submit">Criar empresa <span aria-hidden="true">→</span></button><p class="inline-message" id="tenant-message" role="status"></p></div></form></article></section>` : ''}
+        <section id="tablets" class="dashboard-section"><div class="section-heading"><div><p class="section-kicker">OPERAÇÃO</p><h2>Seus tablets</h2></div><div class="section-heading__action"><span id="device-count" class="section-counter">Carregando...</span><a href="#operations" class="text-link">+ Parear tablet</a></div></div><div class="dashboard-card dashboard-card--flush"><div id="device-list" class="device-list">Carregando...</div></div></section>
+        <section id="surveys" class="dashboard-section"><div class="section-heading"><div><p class="section-kicker">CONTEÚDO</p><h2>Pesquisas</h2></div><span class="section-caption">Perguntas que estão ativas no seu atendimento</span></div><div class="dashboard-card"><div id="survey-list" class="survey-list">Carregando...</div></div></section>
+        <section id="reports" class="dashboard-section report-section"><div class="section-heading"><div><p class="section-kicker">LEITURA DOS RESULTADOS</p><h2>Relatório de satisfação</h2></div><span id="report-total" class="section-counter">Carregando...</span></div><div class="dashboard-card report-card"><div class="report-toolbar"><div class="date-row"><label>De <input id="from" type="date"></label><label>Até <input id="to" type="date"></label></div><div class="report-filters"><label>Pesquisa<select id="report-survey"><option value="">Todas</option></select></label><label>Unidade<select id="report-location"><option value="">Todas</option></select></label><label>Tablet<select id="report-device"><option value="">Todos</option></select></label></div><button id="load-report" class="outline-button" type="button">Atualizar dados <span aria-hidden="true">↻</span></button></div><div class="report-results"><div class="report-results__header"><h3>Distribuição das avaliações</h3><span>Percepção dos clientes</span></div><div id="report-distribution" class="distribution-list"></div><div id="report-list" class="report-list"></div></div></div></section>
       </section>
     </main>`;
 
@@ -242,13 +243,13 @@ async function renderDashboard(root, user) {
     ]);
 
     root.querySelector('#survey-list').innerHTML = surveys.length
-      ? surveys.map((survey) => `<div class="survey-row"><div><strong>${escapeHtml(survey.title)}</strong><small>${survey.assigned_devices || 0} tablet(s) associado(s)</small></div><div class="row-actions"><span>${survey.published ? 'Ativa' : 'Inativa'}</span><button class="outline-button edit-survey" data-survey="${survey.id}">Editar</button><button class="outline-button toggle-survey" data-survey="${survey.id}" data-published="${survey.published}">${survey.published ? 'Desativar' : 'Ativar'}</button></div></div>`).join('')
+      ? surveys.map((survey) => `<div class="survey-row"><div class="survey-row__icon" aria-hidden="true">✦</div><div class="survey-row__body"><strong>${escapeHtml(survey.title)}</strong><small><span class="status-pill ${survey.published ? 'status-pill--active' : 'status-pill--muted'}">${survey.published ? 'Ativa' : 'Inativa'}</span><span>${survey.assigned_devices || 0} tablet(s) associado(s)</span></small></div><div class="row-actions"><button class="outline-button edit-survey" data-survey="${survey.id}">Editar</button><button class="outline-button toggle-survey" data-survey="${survey.id}" data-published="${survey.published}">${survey.published ? 'Desativar' : 'Ativar'}</button></div></div>`).join('')
       : '<p class="empty-state">Nenhuma pesquisa cadastrada.</p>';
 
     root.querySelector('#device-count').textContent = `${devices.length} dispositivo(s)`;
     root.querySelector('#device-list').innerHTML = devices.length ? devices.map((device) => `
       <div class="device-row ${device.active ? '' : 'device-row--inactive'}">
-        <div><strong>${escapeHtml(device.name)}</strong><small>${escapeHtml(device.location_name || 'Sem unidade')} · ${device.runtime_status === 'online' ? 'Online' : 'Offline'}${device.last_seen_at ? ` · visto ${escapeHtml(new Date(device.last_seen_at).toLocaleString('pt-BR'))}` : ''}${device.active ? '' : ' · Desativado'}</small><small>Pesquisa: ${escapeHtml(device.active_survey_title || '—')} · App: ${escapeHtml(device.app_version || '—')}</small><small>Modelo: ${escapeHtml(device.manufacturer || '—')} ${escapeHtml(device.model || '')} · Android: ${escapeHtml(device.android_version || '—')} · Bateria: ${device.battery_level === null || device.battery_level === undefined ? '—' : `${device.battery_level}%`}${device.charging === true ? ' carregando' : ''}</small><small>Rede: ${escapeHtml(device.network_state || '—')} · Pendentes: ${device.pending_responses ?? '—'} · Orientação: ${escapeHtml(device.orientation || '—')}</small></div>
+        <div class="device-summary"><div class="device-name-row"><span class="status-dot ${device.runtime_status === 'online' ? 'status-dot--online' : 'status-dot--offline'}" aria-hidden="true"></span><strong>${escapeHtml(device.name)}</strong><span class="device-status-label">${device.runtime_status === 'online' ? 'Online' : 'Offline'}</span>${device.active ? '' : '<span class="status-pill status-pill--muted">Desativado</span>'}</div><small class="device-location">${escapeHtml(device.location_name || 'Sem unidade')}${device.last_seen_at ? ` · visto ${escapeHtml(new Date(device.last_seen_at).toLocaleString('pt-BR'))}` : ''}</small><div class="device-meta"><span>Pesquisa: <strong>${escapeHtml(device.active_survey_title || '—')}</strong></span><span>${escapeHtml(device.manufacturer || '—')} ${escapeHtml(device.model || '')} · Android ${escapeHtml(device.android_version || '—')}</span><span>Bateria ${device.battery_level === null || device.battery_level === undefined ? '—' : `${device.battery_level}%`}${device.charging === true ? ' · carregando' : ''} · ${escapeHtml(device.network_state || '—')}</span><span>Pendentes: ${device.pending_responses ?? '—'} · ${escapeHtml(device.orientation || '—')}</span></div></div>
         <div class="device-assign"><select data-survey-for="${device.id}"><option value="">Escolha uma pesquisa</option>${surveys.map((survey) => `<option value="${survey.id}" ${String(survey.id) === String(device.active_survey_id) ? 'selected' : ''}>${escapeHtml(survey.title)}</option>`).join('')}</select><button class="outline-button assign-button" data-device="${device.id}">Aplicar</button><button class="outline-button refresh-config" data-device="${device.id}">Atualizar config.</button><button class="outline-button clear-survey" data-device="${device.id}">Remover pesquisa</button><button class="outline-button edit-device" data-device="${device.id}" data-name="${escapeHtml(device.name)}" data-location="${escapeHtml(device.location_name || '')}">Editar</button><button class="outline-button unpair-device" data-device="${device.id}">Desparear</button>${device.active ? `<button class="outline-button danger-button deactivate-device" data-device="${device.id}">Desativar</button>` : ''}</div>
       </div>`).join('') : '<p class="empty-state">Nenhum tablet pareado.</p>';
 
@@ -268,12 +269,12 @@ async function renderDashboard(root, user) {
     const report = reports?.metrics ? reports : { metrics: { total: 0, averageScore: null, satisfiedRate: 0, neutralRate: 0, dissatisfiedRate: 0 }, distribution: [], rows: [] };
     const metrics = report.metrics;
     root.querySelector('#report-total').textContent = `${metrics.total} avaliação(ões)`;
-    root.querySelector('#report-metrics').innerHTML = `<div class="metric-card"><strong>${metrics.total}</strong><span>Avaliações</span></div><div class="metric-card"><strong>${Number(metrics.satisfiedRate || 0).toLocaleString('pt-BR')}%</strong><span>Satisfeitos</span></div><div class="metric-card"><strong>${metrics.averageScore === null ? '—' : Number(metrics.averageScore).toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}</strong><span>Média (1–5)</span></div><div class="metric-card"><strong>${Number(metrics.dissatisfiedRate || 0).toLocaleString('pt-BR')}%</strong><span>Insatisfeitos</span></div>`;
+    root.querySelector('#report-metrics').innerHTML = `<div class="metric-card metric-card--blue"><div class="metric-card__top"><span class="metric-card__icon" aria-hidden="true">◒</span><span>Total recebido</span></div><strong>${metrics.total}</strong><small>Avaliações no período</small></div><div class="metric-card metric-card--green"><div class="metric-card__top"><span class="metric-card__icon" aria-hidden="true">♥</span><span>Satisfação</span></div><strong>${Number(metrics.satisfiedRate || 0).toLocaleString('pt-BR')}%</strong><small>Clientes satisfeitos</small></div><div class="metric-card metric-card--purple"><div class="metric-card__top"><span class="metric-card__icon" aria-hidden="true">★</span><span>Nota média</span></div><strong>${metrics.averageScore === null ? '—' : Number(metrics.averageScore).toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}</strong><small>De 1 a 5</small></div><div class="metric-card metric-card--orange"><div class="metric-card__top"><span class="metric-card__icon" aria-hidden="true">!</span><span>Atenção</span></div><strong>${Number(metrics.dissatisfiedRate || 0).toLocaleString('pt-BR')}%</strong><small>Clientes insatisfeitos</small></div>`;
     root.querySelector('#report-distribution').innerHTML = report.distribution?.length
       ? report.distribution.map((item) => `<div class="distribution-row"><span class="distribution-label">${item.emoji} ${escapeHtml(item.label)}</span><span class="distribution-bar"><i style="width:${metrics.total ? Math.min(100, (item.count / metrics.total) * 100) : 0}%"></i></span><strong>${item.count}</strong></div>`).join('')
       : '<p class="empty-state">Sem distribuição no período.</p>';
     root.querySelector('#report-list').innerHTML = report.rows?.length
-      ? report.rows.slice(0, 30).map((row) => `<p><strong>${escapeHtml(row.survey_title)}</strong> · ${escapeHtml(row.location_name || row.device_name || 'Tablet')} · ${escapeHtml(row.day)}: ${row.total}</p>`).join('')
+      ? report.rows.slice(0, 30).map((row) => `<div class="report-row"><span class="report-row__dot" aria-hidden="true"></span><div><strong>${escapeHtml(row.survey_title)}</strong><small>${escapeHtml(row.location_name || row.device_name || 'Tablet')} · ${escapeHtml(row.day)}</small></div><b>${row.total}</b></div>`).join('')
       : '<p class="empty-state">Sem respostas no período.</p>';
 
     root.querySelectorAll('.clear-survey').forEach((button) => {
