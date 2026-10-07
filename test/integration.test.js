@@ -160,6 +160,33 @@ test('integra autenticação, isolamento, pareamento, respostas e relatório', a
   const deviceConfig = await api(`/api/devices/config?deviceId=${encodeURIComponent(deviceAId)}`, { headers: { Authorization: `Bearer ${deviceASecret}` } });
   assert.equal(deviceConfig.response.status, 200, JSON.stringify(deviceConfig.body));
   assert.equal(deviceConfig.body.survey.id, surveyA.id);
+  assert.ok(deviceConfig.body.configVersion > 0);
+  const unchangedConfig = await api(`/api/devices/config?deviceId=${encodeURIComponent(deviceAId)}&currentConfigVersion=${deviceConfig.body.configVersion}`, { headers: { Authorization: `Bearer ${deviceASecret}` } });
+  assert.equal(unchangedConfig.response.status, 200, JSON.stringify(unchangedConfig.body));
+  assert.equal(unchangedConfig.body.status, 'unchanged');
+  const telemetryHeartbeat = await api('/api/devices/heartbeat', {
+    method: 'POST', headers: { Authorization: `Bearer ${deviceASecret}` },
+    body: JSON.stringify({
+      deviceId: deviceAId,
+      appVersion: 'android-kiosk/1.0.0',
+      currentConfigVersion: deviceConfig.body.configVersion,
+      platform: 'android', androidVersion: '13', manufacturer: 'LENOVO', model: 'TB310FU',
+      batteryLevel: 82, charging: true, networkState: 'wifi', pendingResponses: 2,
+      kioskState: 'active', orientation: 'portrait',
+    }),
+  });
+  assert.equal(telemetryHeartbeat.response.status, 200, JSON.stringify(telemetryHeartbeat.body));
+  assert.equal(telemetryHeartbeat.body.configChanged, false);
+  const managedDevices = await api('/api/devices', { token: adminAToken });
+  const managedDeviceA = managedDevices.body.find((device) => String(device.id) === String(deviceA));
+  assert.equal(managedDeviceA.platform, 'android');
+  assert.equal(managedDeviceA.orientation, 'portrait');
+  assert.equal(managedDeviceA.pending_responses, 2);
+  const forceRefresh = await api(`/api/devices/${deviceA}/refresh-config`, { method: 'POST', token: adminAToken });
+  assert.equal(forceRefresh.response.status, 200, JSON.stringify(forceRefresh.body));
+  assert.ok(forceRefresh.body.configVersion > deviceConfig.body.configVersion);
+  const refreshedConfig = await api(`/api/devices/config?deviceId=${encodeURIComponent(deviceAId)}&currentConfigVersion=${deviceConfig.body.configVersion}`, { headers: { Authorization: `Bearer ${deviceASecret}` } });
+  assert.equal(refreshedConfig.body.survey.id, surveyA.id);
   const questionId = deviceConfig.body.survey.questions[0].id;
   const submissionId = randomUUID();
   const responsePayload = { deviceId: deviceAId, surveyId: surveyA.id, submissionId, answeredAt: new Date(Date.now() - 1000).toISOString(), answers: { [questionId]: '5' } };
