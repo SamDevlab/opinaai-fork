@@ -1,6 +1,2 @@
-CREATE TABLE IF NOT EXISTS tenants (id SERIAL PRIMARY KEY, name VARCHAR(160) NOT NULL, created_at TIMESTAMPTZ DEFAULT now());
-CREATE TABLE IF NOT EXISTS users (id SERIAL PRIMARY KEY, tenant_id INT REFERENCES tenants(id) ON DELETE CASCADE, name VARCHAR(160) NOT NULL, email VARCHAR(180) UNIQUE NOT NULL, password_hash TEXT NOT NULL, role VARCHAR(20) NOT NULL CHECK(role IN ('SUPERADMIN','ADMIN','USER')), active BOOLEAN DEFAULT true, created_at TIMESTAMPTZ DEFAULT now());
-CREATE TABLE IF NOT EXISTS surveys (id SERIAL PRIMARY KEY, tenant_id INT REFERENCES tenants(id) ON DELETE CASCADE, title VARCHAR(200) NOT NULL, description TEXT, theme JSONB DEFAULT '{}'::jsonb, published BOOLEAN DEFAULT false, created_at TIMESTAMPTZ DEFAULT now());
-CREATE TABLE IF NOT EXISTS questions (id SERIAL PRIMARY KEY, survey_id INT REFERENCES surveys(id) ON DELETE CASCADE, text TEXT NOT NULL, type VARCHAR(20) NOT NULL CHECK(type IN ('emoji','scale','options')), position INT DEFAULT 0, options JSONB DEFAULT '[]'::jsonb);
-CREATE TABLE IF NOT EXISTS responses (id BIGSERIAL PRIMARY KEY, survey_id INT REFERENCES surveys(id) ON DELETE CASCADE, answers JSONB NOT NULL, created_at TIMESTAMPTZ DEFAULT now());
-CREATE INDEX IF NOT EXISTS responses_survey_date_idx ON responses(survey_id, created_at);
+-- Compatibilidade: o schema agora é versionado em server/migrations/.
+-- Novos ambientes e bancos existentes são atualizados automaticamente pelo servidor.

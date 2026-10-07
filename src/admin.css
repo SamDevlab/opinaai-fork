@@ -1,0 +1,21 @@
+.dashboard-actions { display:flex; gap:10px; align-items:center; }
+.tablet-link { text-decoration:none; }
+.control-strip { margin-bottom:22px; }
+.control-strip label { display:flex; align-items:center; gap:12px; margin:0; }
+.control-strip select { width:min(420px, 100%); }
+.submit-button.compact { height:52px; margin-top:18px; font-size:1rem; }
+.inline-message { min-height:20px; margin:10px 0 0; color:#176ee8; font-size:.9rem; }
+.muted-copy, .empty-state { color:#7b8799; line-height:1.55; }
+.is-hidden { display:none !important; }
+.lower-grid { margin-top:22px; }
+.device-row { display:flex; justify-content:space-between; align-items:center; gap:18px; padding:18px 0; border-top:1px solid #e5ebf3; }
+.device-row:first-child { border-top:0; }
+.device-row strong, .device-row small { display:block; }
+.device-row small { margin-top:5px; color:#7b8799; }
+.device-assign { display:flex; align-items:center; gap:10px; min-width:min(500px, 55%); }
+.device-assign select { min-width:220px; }
+@media (max-width:780px) {
+  .dashboard-actions, .device-row, .device-assign, .control-strip label { align-items:stretch; flex-direction:column; }
+  .device-assign { min-width:0; width:100%; }
+  .device-assign select { min-width:0; }
+}
