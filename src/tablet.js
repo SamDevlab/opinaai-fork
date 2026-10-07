@@ -216,6 +216,9 @@ export async function renderTablet(root) {
 
   function renderQuestion(question) {
     const name = `q-${question.id}`;
+    if (question.type === 'stars') {
+      return `<fieldset class="question"><legend>${escapeHtml(question.text)}</legend><div class="stars-grid">${Array.from({ length: 5 }, (_, index) => index + 1).map((value) => `<label><input type="radio" name="${name}" value="${value}" required><span class="star-choice" aria-label="${value} estrela${value === 1 ? '' : 's'}">★</span></label>`).join('')}</div></fieldset>`;
+    }
     if (question.type === 'scale') {
       return `<fieldset class="question"><legend>${escapeHtml(question.text)}</legend><div class="scale-grid">${Array.from({ length: 10 }, (_, index) => index + 1).map((value) => `<label><input type="radio" name="${name}" value="${value}" required><span>${value}</span></label>`).join('')}</div></fieldset>`;
     }

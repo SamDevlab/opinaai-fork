@@ -111,6 +111,14 @@ test('integra autenticação, isolamento, pareamento, respostas e relatório', a
   });
   assert.equal(surveyAResult.response.status, 201, JSON.stringify(surveyAResult.body));
   const surveyA = surveyAResult.body;
+  const starSurveyResult = await api('/api/surveys', {
+    method: 'POST', token: superToken,
+    body: JSON.stringify({ tenantId: tenantA, title: `Avaliação por estrelas ${tag}`, description: 'Avalie com estrelas', questions: [{ text: 'Avalie com estrelas', type: 'stars', options: [] }] }),
+  });
+  assert.equal(starSurveyResult.response.status, 201, JSON.stringify(starSurveyResult.body));
+  const starSurvey = await api(`/api/surveys/${starSurveyResult.body.id}`, { token: superToken });
+  assert.equal(starSurvey.response.status, 200, JSON.stringify(starSurvey.body));
+  assert.equal(starSurvey.body.questions[0].type, 'stars');
   const surveyBResult = await api('/api/surveys', {
     method: 'POST', token: superToken,
     body: JSON.stringify({ tenantId: tenantB, title: `Pesquisa B ${tag}`, description: 'Pergunta B', questions: [{ text: 'Pergunta B', type: 'emoji', options: [] }] }),

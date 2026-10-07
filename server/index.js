@@ -121,7 +121,7 @@ function emptyDistribution() {
 
 function normalizeQuestions(input) {
   const questions = Array.isArray(input) ? input.slice(0, 20) : [];
-  const allowedTypes = new Set(['emoji', 'scale', 'options']);
+  const allowedTypes = new Set(['emoji', 'stars', 'scale', 'options']);
   const normalized = questions.map((question, index) => ({
     id: asPositiveInt(question?.id),
     text: cleanText(question?.text, 500),
@@ -466,14 +466,14 @@ app.get('/api/reports', auth, asyncRoute(async (req, res) => {
     pool.query(`${baseSql}
       SELECT COUNT(*)::int AS total,
              ROUND(AVG(score)::numeric,2) AS average_score,
-             COUNT(*) FILTER (WHERE question_type='emoji' AND score BETWEEN 4 AND 5)::int AS satisfied_count,
-             COUNT(*) FILTER (WHERE question_type='emoji' AND score=3)::int AS neutral_count,
-             COUNT(*) FILTER (WHERE question_type='emoji' AND score BETWEEN 1 AND 2)::int AS dissatisfied_count,
-             COUNT(*) FILTER (WHERE question_type='emoji' AND score=1)::int AS very_dissatisfied_count,
-             COUNT(*) FILTER (WHERE question_type='emoji' AND score=2)::int AS dissatisfied_low_count,
-             COUNT(*) FILTER (WHERE question_type='emoji' AND score=3)::int AS neutral_distribution_count,
-             COUNT(*) FILTER (WHERE question_type='emoji' AND score=4)::int AS satisfied_low_count,
-             COUNT(*) FILTER (WHERE question_type='emoji' AND score=5)::int AS satisfied_high_count
+             COUNT(*) FILTER (WHERE question_type IN ('emoji','stars') AND score BETWEEN 4 AND 5)::int AS satisfied_count,
+             COUNT(*) FILTER (WHERE question_type IN ('emoji','stars') AND score=3)::int AS neutral_count,
+             COUNT(*) FILTER (WHERE question_type IN ('emoji','stars') AND score BETWEEN 1 AND 2)::int AS dissatisfied_count,
+             COUNT(*) FILTER (WHERE question_type IN ('emoji','stars') AND score=1)::int AS very_dissatisfied_count,
+             COUNT(*) FILTER (WHERE question_type IN ('emoji','stars') AND score=2)::int AS dissatisfied_low_count,
+             COUNT(*) FILTER (WHERE question_type IN ('emoji','stars') AND score=3)::int AS neutral_distribution_count,
+             COUNT(*) FILTER (WHERE question_type IN ('emoji','stars') AND score=4)::int AS satisfied_low_count,
+             COUNT(*) FILTER (WHERE question_type IN ('emoji','stars') AND score=5)::int AS satisfied_high_count
         FROM scored`, params),
     pool.query(`${baseSql}
       SELECT survey_id,survey_title,device_id,device_name,location_id,location_name,COUNT(*)::int AS total,day
@@ -825,7 +825,7 @@ app.post('/api/devices/responses', deviceAuth, async (req, res) => {
   for (const [questionId, value] of Object.entries(answers)) {
     const question = questionMap.get(String(questionId));
     const normalized = String(value ?? '').trim();
-    const valid = question.type === 'emoji'
+    const valid = question.type === 'emoji' || question.type === 'stars'
       ? /^[1-5]$/.test(normalized)
       : question.type === 'scale'
         ? /^(10|[1-9])$/.test(normalized)
