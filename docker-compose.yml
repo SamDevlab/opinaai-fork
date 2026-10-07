@@ -1,0 +1,16 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: opina-ai-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: opina_ai
+      POSTGRES_USER: opina
+      POSTGRES_PASSWORD: opina
+    ports:
+      - "5433:5432"
+    volumes:
+      - opina_pgdata:/var/lib/postgresql/data
+      - ./server/schema.sql:/docker-entrypoint-initdb.d/001-schema.sql:ro
+volumes:
+  opina_pgdata:

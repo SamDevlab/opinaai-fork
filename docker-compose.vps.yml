@@ -1,0 +1,31 @@
+services:
+  db:
+    image: postgres:16-alpine
+    container_name: opinaai-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: opina_ai
+      POSTGRES_USER: opina_ai
+      POSTGRES_PASSWORD: opina_ai_change_me
+    volumes:
+      - opinaai_pgdata:/var/lib/postgresql/data
+      - ./server/schema.sql:/docker-entrypoint-initdb.d/001-schema.sql:ro
+    networks: [opinaai]
+  app:
+    build: .
+    container_name: opinaai-app
+    restart: unless-stopped
+    environment:
+      PORT: 4000
+      DATABASE_URL: postgres://opina_ai:opina_ai_change_me@db:5432/opina_ai
+      JWT_SECRET: change-this-opinaai-jwt-secret
+    depends_on: [db]
+    ports:
+      - "127.0.0.1:4010:4000"
+    expose: ["4000"]
+    networks: [opinaai]
+networks:
+  opinaai:
+    name: opinaai_network
+volumes:
+  opinaai_pgdata:
