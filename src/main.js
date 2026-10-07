@@ -142,11 +142,11 @@ async function renderDashboard(root, user) {
         <div class="sidebar-brand"><span class="brand-symbol" aria-hidden="true">${dashboardIcon('spark')}</span><div><strong>Opina <em>AI</em></strong><small>Painel de satisfação</small></div></div>
         <p class="sidebar-label">NAVEGAÇÃO</p>
         <nav class="dashboard-nav" aria-label="Navegação do painel">
-          <a class="dashboard-nav__item is-active" href="#overview"><span aria-hidden="true">${dashboardIcon('home')}</span> Visão geral</a>
-          <a class="dashboard-nav__item" href="#operations"><span aria-hidden="true">${dashboardIcon('settings')}</span> Configuração</a>
-          <a class="dashboard-nav__item" href="#tablets"><span aria-hidden="true">${dashboardIcon('tablet')}</span> Tablets</a>
-          <a class="dashboard-nav__item" href="#surveys"><span aria-hidden="true">${dashboardIcon('survey')}</span> Pesquisas</a>
-          <a class="dashboard-nav__item" href="#reports"><span aria-hidden="true">${dashboardIcon('chart')}</span> Relatórios</a>
+          <a class="dashboard-nav__item is-active" data-view="overview" href="#overview"><span aria-hidden="true">${dashboardIcon('home')}</span> Visão geral</a>
+          <a class="dashboard-nav__item" data-view="operations" href="#operations"><span aria-hidden="true">${dashboardIcon('settings')}</span> Configuração</a>
+          <a class="dashboard-nav__item" data-view="tablets" href="#tablets"><span aria-hidden="true">${dashboardIcon('tablet')}</span> Tablets</a>
+          <a class="dashboard-nav__item" data-view="surveys" href="#surveys"><span aria-hidden="true">${dashboardIcon('survey')}</span> Pesquisas</a>
+          <a class="dashboard-nav__item" data-view="reports" href="#reports"><span aria-hidden="true">${dashboardIcon('chart')}</span> Relatórios</a>
         </nav>
         <div class="sidebar-note"><span class="sidebar-note__icon" aria-hidden="true">${dashboardIcon('heart')}</span><strong>Experiência em foco</strong><p>Uma visão simples para transformar cada resposta em melhoria.</p></div>
         <div class="sidebar-profile"><span class="profile-avatar">${escapeHtml(String(user.name || 'A').slice(0, 1).toUpperCase())}</span><div><strong>${escapeHtml(user.name)}</strong><span>Administrador</span></div></div>
@@ -157,26 +157,48 @@ async function renderDashboard(root, user) {
           <div class="topbar-actions"><span class="sync-status"><i aria-hidden="true"></i> Atualizado</span><a class="primary-button" href="/tablet" target="_blank">Abrir modo tablet <span aria-hidden="true">↗</span></a><button id="logout" class="topbar-logout" type="button">Sair</button></div>
         </header>
         <section id="overview" class="dashboard-page-header">
-          <div><p class="section-kicker">VISÃO GERAL</p><h1>Visão geral</h1><p class="page-subtitle">Acompanhe as avaliações e a operação dos tablets.</p></div>
+          <div><p class="section-kicker">PAINEL</p><h1 id="page-title">Visão geral</h1><p id="page-subtitle" class="page-subtitle">Acompanhe as avaliações e a operação dos tablets.</p></div>
           ${user.role === 'SUPERADMIN' ? `<label class="tenant-select"><span>Empresa</span><select id="tenant-filter" aria-label="Empresa">${tenantOptions()}</select></label>` : ''}
         </section>
-        <section class="dashboard-section overview-section">
+        <section class="dashboard-section overview-section" data-dashboard-view="overview">
           <div class="section-heading"><div><h2>Resumo</h2></div><span class="section-counter">Período atual</span></div>
           <div id="report-metrics" class="metric-grid overview-metrics"></div>
         </section>
-        <section id="operations" class="dashboard-section">
+        <section id="operations" class="dashboard-section" data-dashboard-view="operations">
           <div class="section-heading"><div><p class="section-kicker">CONFIGURAÇÃO</p><h2>Configurar operação</h2></div></div>
           <div class="dashboard-grid action-grid">
             <article class="dashboard-card action-card action-card--survey"><div class="action-card__icon" aria-hidden="true">${dashboardIcon('survey')}</div><div class="action-card__intro"><h3>Nova pesquisa</h3><p>Crie a pergunta exibida no tablet.</p></div><form id="survey-form" class="form-stack"><div class="form-grid"><label>Título da pesquisa<input name="title" required placeholder="Ex.: Experiência de atendimento"></label><label>Pergunta para o cliente<input name="question" required placeholder="Como você avalia sua experiência?"></label></div><label>Tipo de resposta<select name="type"><option value="emoji">5 níveis de satisfação</option><option value="scale">Nota de 1 a 10</option><option value="options">Opções personalizadas</option></select></label><label class="options-field is-hidden">Opções separadas por vírgula<input class="options-field is-hidden" name="options" placeholder="Ótimo, Bom, Regular, Ruim"></label><div class="form-submit-row"><button class="submit-button compact" type="submit">Cadastrar pesquisa <span aria-hidden="true">→</span></button><p class="inline-message" id="survey-message" role="status"></p></div></form></article>
             <article class="dashboard-card action-card action-card--pair"><div class="action-card__icon" aria-hidden="true">${dashboardIcon('tablet')}</div><div class="action-card__intro"><h3>Parear tablet</h3><p>Conecte um dispositivo à operação.</p></div><form id="pair-form" class="form-stack"><label>Código exibido no tablet<input name="activationCode" inputmode="numeric" maxlength="6" pattern="[0-9]{6}" required placeholder="Ex.: 482913"></label><div class="form-grid"><label>Nome do tablet<input name="deviceName" placeholder="Tablet Recepção"></label><label>Unidade / local<input name="locationName" value="Recepção" required></label></div><div class="form-submit-row"><button class="submit-button compact" type="submit">Parear dispositivo <span aria-hidden="true">→</span></button><p class="inline-message" id="pair-message" role="status"></p></div></form></article>
           </div>
         </section>
-        ${user.role === 'SUPERADMIN' ? `<section id="companies" class="dashboard-section admin-tools"><details class="admin-details"><summary><span><small>ADMINISTRAÇÃO</small><strong>Gerenciar empresas</strong></span><b>Adicionar empresa <span aria-hidden="true">＋</span></b></summary><article class="dashboard-card"><form id="tenant-form" class="form-grid form-grid--tenant"><label>Nome da empresa<input name="name" required></label><label>E-mail do administrador<input name="email" type="email" required></label><label>Senha inicial<input name="password" type="password" minlength="8" required></label><div class="form-submit-row"><button class="submit-button compact" type="submit">Criar empresa <span aria-hidden="true">→</span></button><p class="inline-message" id="tenant-message" role="status"></p></div></form></article></details></section>` : ''}
-        <section id="tablets" class="dashboard-section"><div class="section-heading"><div><p class="section-kicker">OPERAÇÃO</p><h2>Tablets</h2></div><div class="section-heading__action"><span id="device-count" class="section-counter">Carregando...</span><a href="#operations" class="text-link">+ Parear tablet</a></div></div><div class="dashboard-card dashboard-card--flush"><div id="device-list" class="device-list">Carregando...</div></div></section>
-        <section id="surveys" class="dashboard-section"><div class="section-heading"><div><p class="section-kicker">CONTEÚDO</p><h2>Pesquisas</h2></div></div><div class="dashboard-card"><div id="survey-list" class="survey-list">Carregando...</div></div></section>
-        <section id="reports" class="dashboard-section report-section"><div class="section-heading"><div><p class="section-kicker">RESULTADOS</p><h2>Relatórios</h2></div><span id="report-total" class="section-counter">Carregando...</span></div><div class="dashboard-card report-card"><div class="report-toolbar"><div class="date-row"><label>De <input id="from" type="date"></label><label>Até <input id="to" type="date"></label></div><div class="report-filters"><label>Pesquisa<select id="report-survey"><option value="">Todas</option></select></label><label>Unidade<select id="report-location"><option value="">Todas</option></select></label><label>Tablet<select id="report-device"><option value="">Todos</option></select></label></div><button id="load-report" class="outline-button" type="button">Atualizar <span aria-hidden="true">↻</span></button></div><div class="report-results"><div class="report-results__header"><h3>Distribuição</h3><span>Respostas por avaliação</span></div><div id="report-distribution" class="distribution-list"></div><div id="report-list" class="report-list"></div></div></div></section>
+        ${user.role === 'SUPERADMIN' ? `<section id="companies" class="dashboard-section admin-tools" data-dashboard-view="operations"><details class="admin-details"><summary><span><small>ADMINISTRAÇÃO</small><strong>Gerenciar empresas</strong></span><b>Adicionar empresa <span aria-hidden="true">＋</span></b></summary><article class="dashboard-card"><form id="tenant-form" class="form-grid form-grid--tenant"><label>Nome da empresa<input name="name" required></label><label>E-mail do administrador<input name="email" type="email" required></label><label>Senha inicial<input name="password" type="password" minlength="8" required></label><div class="form-submit-row"><button class="submit-button compact" type="submit">Criar empresa <span aria-hidden="true">→</span></button><p class="inline-message" id="tenant-message" role="status"></p></div></form></article></details></section>` : ''}
+        <section id="tablets" class="dashboard-section" data-dashboard-view="tablets"><div class="section-heading"><div><p class="section-kicker">OPERAÇÃO</p><h2>Tablets</h2></div><div class="section-heading__action"><span id="device-count" class="section-counter">Carregando...</span><a data-view="operations" href="#operations" class="text-link">+ Parear tablet</a></div></div><div class="dashboard-card dashboard-card--flush"><div id="device-list" class="device-list">Carregando...</div></div></section>
+        <section id="surveys" class="dashboard-section" data-dashboard-view="surveys"><div class="section-heading"><div><p class="section-kicker">CONTEÚDO</p><h2>Pesquisas</h2></div></div><div class="dashboard-card"><div id="survey-list" class="survey-list">Carregando...</div></div></section>
+        <section id="reports" class="dashboard-section report-section" data-dashboard-view="reports"><div class="section-heading"><div><p class="section-kicker">RESULTADOS</p><h2>Relatórios</h2></div><span id="report-total" class="section-counter">Carregando...</span></div><div class="dashboard-card report-card"><div class="report-toolbar"><div class="date-row"><label>De <input id="from" type="date"></label><label>Até <input id="to" type="date"></label></div><div class="report-filters"><label>Pesquisa<select id="report-survey"><option value="">Todas</option></select></label><label>Unidade<select id="report-location"><option value="">Todas</option></select></label><label>Tablet<select id="report-device"><option value="">Todos</option></select></label></div><button id="load-report" class="outline-button" type="button">Atualizar <span aria-hidden="true">↻</span></button></div><div class="report-results"><div class="report-results__header"><h3>Distribuição</h3><span>Respostas por avaliação</span></div><div id="report-distribution" class="distribution-list"></div><div id="report-list" class="report-list"></div></div></div></section>
       </section>
     </main>`;
+
+  const viewMeta = {
+    overview: ['Visão geral', 'Acompanhe as avaliações e a operação dos tablets.'],
+    operations: ['Configuração', 'Crie pesquisas e conecte os tablets.'],
+    tablets: ['Tablets', 'Acompanhe o status e a pesquisa de cada dispositivo.'],
+    surveys: ['Pesquisas', 'Gerencie as perguntas exibidas nos tablets.'],
+    reports: ['Relatórios', 'Leia os resultados da experiência dos clientes.'],
+  };
+  const showDashboardView = (view, updateHash = true) => {
+    const currentView = viewMeta[view] ? view : 'overview';
+    root.querySelectorAll('[data-dashboard-view]').forEach((section) => section.classList.toggle('is-view-hidden', section.dataset.dashboardView !== currentView));
+    root.querySelectorAll('.dashboard-nav__item').forEach((item) => item.classList.toggle('is-active', item.dataset.view === currentView));
+    root.querySelector('#page-title').textContent = viewMeta[currentView][0];
+    root.querySelector('#page-subtitle').textContent = viewMeta[currentView][1];
+    if (updateHash && location.hash !== `#${currentView}`) history.replaceState(null, '', `#${currentView}`);
+  };
+  root.querySelectorAll('[data-view]').forEach((link) => link.addEventListener('click', (event) => {
+    event.preventDefault();
+    showDashboardView(link.dataset.view);
+  }));
+  window.onhashchange = () => showDashboardView(location.hash.slice(1), false);
+  showDashboardView(location.hash.slice(1), false);
 
   root.querySelector('#logout').onclick = () => { localStorage.removeItem('opina_token'); location.reload(); };
 

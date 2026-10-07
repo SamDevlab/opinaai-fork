@@ -279,6 +279,7 @@
 }
 
 /* UX pass: reduce visual noise and keep secondary controls out of the way. */
+.is-view-hidden { display: none !important; }
 .dashboard-icon { display: block; width: 18px; height: 18px; }
 .brand-symbol .dashboard-icon { width: 19px; height: 19px; }
 .sidebar-note__icon .dashboard-icon { width: 15px; height: 15px; }
