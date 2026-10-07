@@ -1,4 +1,5 @@
-body { display:block; min-height:100vh; background:#eef5ff; }
+html { min-height:100%; background:#eef5ff; }
+body { display:block; min-height:100vh; margin:0; background:#eef5ff; }
 .tablet-shell { min-height:100vh; display:grid; place-items:center; padding:4vh 4vw; background:radial-gradient(circle at 15% 15%,#d9f7ff 0,transparent 28%),linear-gradient(145deg,#f8fbff,#e8f1ff); color:#10213e; }
 .tablet-card, .survey-kiosk { width:min(1180px,94vw); min-height:min(720px,90vh); border:1px solid #d7e2f0; border-radius:40px; background:rgba(255,255,255,.96); box-shadow:0 28px 80px rgba(28,72,130,.14); }
 .tablet-card { display:flex; flex-direction:column; align-items:center; justify-content:center; padding:7vw; text-align:center; }
@@ -30,3 +31,14 @@ body { display:block; min-height:100vh; background:#eef5ff; }
 .survey-kiosk footer { margin-top:28px; color:#94a1b4; text-align:center; font-size:14px; }
 .thanks-icon { display:grid; width:120px; height:120px; margin-bottom:38px; place-items:center; border-radius:50%; background:#e6f8ef; color:#12965d; font-size:70px; font-weight:900; }
 @media (max-width:700px) { .tablet-shell { padding:0; } .tablet-card,.survey-kiosk { width:100vw; min-height:100vh; border:0; border-radius:0; } .emoji-grid label { width:29vw; } .pairing-code { letter-spacing:.08em; } }
+@media (orientation: portrait) {
+  .tablet-shell { min-height:100svh; padding:2vh 3vw; }
+  .tablet-card, .survey-kiosk { width:min(94vw,900px); min-height:96svh; }
+  .survey-kiosk { padding:clamp(24px,4vh,56px) clamp(20px,4vw,48px); }
+  #kiosk-form { gap:clamp(18px,3vh,32px); margin-top:clamp(20px,3vh,34px); }
+  .question legend { margin-bottom:clamp(16px,2vh,30px); }
+  .emoji-grid, .scale-grid, .option-grid { gap:clamp(8px,1.6vw,16px); }
+  .emoji-grid label { width:clamp(100px,12.5vw,150px); padding:clamp(12px,2vh,22px) 8px 14px; }
+  .emoji-face { font-size:clamp(50px,8vw,76px); }
+  .emoji-grid small { font-size:clamp(14px,1.8vw,21px); }
+}

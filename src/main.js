@@ -1,10 +1,20 @@
 import './styles.css';
 import './admin.css';
+import { renderTablet } from './tablet.js';
 
 const app = document.querySelector('#app');
+const nativeKiosk = Boolean(globalThis.Capacitor?.Plugins?.OpinaRuntime);
 
-if (location.pathname === '/tablet' || location.pathname.startsWith('/tablet/')) {
-  import('./tablet.js').then(({ renderTablet }) => renderTablet(app));
+if (nativeKiosk) {
+  renderTablet(app).catch((error) => {
+    console.error('Falha ao iniciar o kiosk Opina AI', error);
+    app.innerHTML = '<main class="tablet-shell"><section class="tablet-card"><p class="tablet-kicker">OPINA AI</p><h1>Falha ao iniciar este tablet</h1><p class="tablet-copy">Reabra o aplicativo para tentar novamente.</p></section></main>';
+  });
+} else if (location.pathname === '/tablet' || location.pathname.startsWith('/tablet/')) {
+  renderTablet(app).catch((error) => {
+    console.error('Falha ao iniciar o kiosk Opina AI', error);
+    app.innerHTML = '<main class="tablet-shell"><section class="tablet-card"><p class="tablet-kicker">OPINA AI</p><h1>Falha ao iniciar este tablet</h1><p class="tablet-copy">Reabra o aplicativo para tentar novamente.</p></section></main>';
+  });
 } else {
   renderAdmin(app);
 }
@@ -238,8 +248,8 @@ async function renderDashboard(root, user) {
     root.querySelector('#device-count').textContent = `${devices.length} dispositivo(s)`;
     root.querySelector('#device-list').innerHTML = devices.length ? devices.map((device) => `
       <div class="device-row ${device.active ? '' : 'device-row--inactive'}">
-        <div><strong>${escapeHtml(device.name)}</strong><small>${escapeHtml(device.location_name || 'Sem unidade')} · ${device.runtime_status === 'online' ? 'Online' : 'Offline'}${device.app_version ? ` · ${escapeHtml(device.app_version)}` : ''}${device.last_seen_at ? ` · visto ${escapeHtml(new Date(device.last_seen_at).toLocaleString('pt-BR'))}` : ''}${device.active ? '' : ' · Desativado'}</small></div>
-        <div class="device-assign"><select data-survey-for="${device.id}"><option value="">Escolha uma pesquisa</option>${surveys.map((survey) => `<option value="${survey.id}" ${String(survey.id) === String(device.active_survey_id) ? 'selected' : ''}>${escapeHtml(survey.title)}</option>`).join('')}</select><button class="outline-button assign-button" data-device="${device.id}">Aplicar</button><button class="outline-button clear-survey" data-device="${device.id}">Remover pesquisa</button><button class="outline-button edit-device" data-device="${device.id}" data-name="${escapeHtml(device.name)}" data-location="${escapeHtml(device.location_name || '')}">Editar</button><button class="outline-button unpair-device" data-device="${device.id}">Desparear</button>${device.active ? `<button class="outline-button danger-button deactivate-device" data-device="${device.id}">Desativar</button>` : ''}</div>
+        <div><strong>${escapeHtml(device.name)}</strong><small>${escapeHtml(device.location_name || 'Sem unidade')} · ${device.runtime_status === 'online' ? 'Online' : 'Offline'}${device.last_seen_at ? ` · visto ${escapeHtml(new Date(device.last_seen_at).toLocaleString('pt-BR'))}` : ''}${device.active ? '' : ' · Desativado'}</small><small>Pesquisa: ${escapeHtml(device.active_survey_title || '—')} · App: ${escapeHtml(device.app_version || '—')}</small><small>Modelo: ${escapeHtml(device.manufacturer || '—')} ${escapeHtml(device.model || '')} · Android: ${escapeHtml(device.android_version || '—')} · Bateria: ${device.battery_level === null || device.battery_level === undefined ? '—' : `${device.battery_level}%`}${device.charging === true ? ' carregando' : ''}</small><small>Rede: ${escapeHtml(device.network_state || '—')} · Pendentes: ${device.pending_responses ?? '—'} · Orientação: ${escapeHtml(device.orientation || '—')}</small></div>
+        <div class="device-assign"><select data-survey-for="${device.id}"><option value="">Escolha uma pesquisa</option>${surveys.map((survey) => `<option value="${survey.id}" ${String(survey.id) === String(device.active_survey_id) ? 'selected' : ''}>${escapeHtml(survey.title)}</option>`).join('')}</select><button class="outline-button assign-button" data-device="${device.id}">Aplicar</button><button class="outline-button refresh-config" data-device="${device.id}">Atualizar config.</button><button class="outline-button clear-survey" data-device="${device.id}">Remover pesquisa</button><button class="outline-button edit-device" data-device="${device.id}" data-name="${escapeHtml(device.name)}" data-location="${escapeHtml(device.location_name || '')}">Editar</button><button class="outline-button unpair-device" data-device="${device.id}">Desparear</button>${device.active ? `<button class="outline-button danger-button deactivate-device" data-device="${device.id}">Desativar</button>` : ''}</div>
       </div>`).join('') : '<p class="empty-state">Nenhum tablet pareado.</p>';
 
     root.querySelectorAll('.assign-button').forEach((button) => {
@@ -268,6 +278,9 @@ async function renderDashboard(root, user) {
 
     root.querySelectorAll('.clear-survey').forEach((button) => {
       button.onclick = async () => { button.disabled = true; try { await api(`/api/devices/${button.dataset.device}/remove-survey`, { method: 'POST' }); await loadDashboardData(); } finally { button.disabled = false; } };
+    });
+    root.querySelectorAll('.refresh-config').forEach((button) => {
+      button.onclick = async () => { button.disabled = true; try { await api(`/api/devices/${button.dataset.device}/refresh-config`, { method: 'POST' }); await loadDashboardData(); } finally { button.disabled = false; } };
     });
     root.querySelectorAll('.edit-device').forEach((button) => {
       button.onclick = async () => {
