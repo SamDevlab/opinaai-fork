@@ -206,6 +206,10 @@ test('integra autenticação, isolamento, pareamento, respostas e relatório', a
   assert.equal(reportA.body.metrics.averageScore, 5);
   assert.equal(reportA.body.metrics.satisfiedRate, 100);
   assert.equal(reportA.body.distribution.find((item) => item.value === '5').count, 1);
+  const reportByDevice = await api(`/api/reports?deviceId=${encodeURIComponent(deviceA)}`, { token: adminAToken });
+  assert.equal(reportByDevice.response.status, 200, JSON.stringify(reportByDevice.body));
+  assert.equal(reportByDevice.body.metrics.total, 1);
+  assert.equal(reportByDevice.body.distribution.find((item) => item.value === '5').count, 1);
   const reportB = await api('/api/reports', { token: adminBToken });
   assert.equal(reportB.body.metrics.total, 0);
 

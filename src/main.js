@@ -269,6 +269,7 @@ async function renderDashboard(root, user) {
     if (root.querySelector('#from').value) reportParams.set('from', root.querySelector('#from').value);
     if (root.querySelector('#to').value) reportParams.set('to', root.querySelector('#to').value);
     const reportFilterNames = { 'report-survey': 'surveyId', 'report-location': 'locationId', 'report-device': 'deviceId' };
+    const selectedReportFilters = Object.fromEntries(Object.keys(reportFilterNames).map((id) => [id, root.querySelector(`#${id}`).value]));
     for (const id of Object.keys(reportFilterNames)) {
       const value = root.querySelector(`#${id}`).value;
       if (value) reportParams.set(reportFilterNames[id], value);
@@ -300,9 +301,16 @@ async function renderDashboard(root, user) {
       };
     });
 
-    root.querySelector('#report-survey').innerHTML = `<option value="">Todas</option>${surveys.map((survey) => `<option value="${survey.id}">${escapeHtml(survey.title)}</option>`).join('')}`;
-    root.querySelector('#report-location').innerHTML = `<option value="">Todas</option>${[...new Map(devices.filter((device) => device.location_id).map((device) => [device.location_id, device.location_name])).entries()].map(([id, name]) => `<option value="${id}">${escapeHtml(name)}</option>`).join('')}`;
-    root.querySelector('#report-device').innerHTML = `<option value="">Todos</option>${devices.map((device) => `<option value="${device.id}">${escapeHtml(device.name)}</option>`).join('')}`;
+    const reportFilterOptions = {
+      'report-survey': `<option value="">Todas</option>${surveys.map((survey) => `<option value="${survey.id}">${escapeHtml(survey.title)}</option>`).join('')}`,
+      'report-location': `<option value="">Todas</option>${[...new Map(devices.filter((device) => device.location_id).map((device) => [device.location_id, device.location_name])).entries()].map(([id, name]) => `<option value="${id}">${escapeHtml(name)}</option>`).join('')}`,
+      'report-device': `<option value="">Todos</option>${devices.map((device) => `<option value="${device.id}">${escapeHtml(device.name)}</option>`).join('')}`,
+    };
+    for (const id of Object.keys(reportFilterOptions)) {
+      const select = root.querySelector(`#${id}`);
+      select.innerHTML = reportFilterOptions[id];
+      if (selectedReportFilters[id]) select.value = selectedReportFilters[id];
+    }
     const report = reports?.metrics ? reports : { metrics: { total: 0, averageScore: null, satisfiedRate: 0, neutralRate: 0, dissatisfiedRate: 0 }, distribution: [], rows: [] };
     const metrics = report.metrics;
     root.querySelector('#report-total').textContent = `${metrics.total} avaliação(ões)`;

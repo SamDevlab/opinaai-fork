@@ -445,7 +445,11 @@ app.get('/api/reports', auth, asyncRoute(async (req, res) => {
     SELECT r.id,r.survey_id,s.title AS survey_title,r.device_id,d.name AS device_name,
            r.location_id,l.name AS location_name,
            date_trunc('day',COALESCE(r.answered_at,r.created_at))::date AS day,
-           fq.type AS question_type,r.answers ->> fq.id::text AS score_text
+           fq.type AS question_type,
+           COALESCE(
+             r.answers ->> fq.id::text,
+             (SELECT value FROM jsonb_each_text(COALESCE(r.answers,'{}'::jsonb)) WHERE value ~ '^(10|[1-9])$' ORDER BY key LIMIT 1)
+           ) AS score_text
       FROM responses r
       JOIN surveys s ON s.id=r.survey_id
       LEFT JOIN devices d ON d.id=r.device_id
