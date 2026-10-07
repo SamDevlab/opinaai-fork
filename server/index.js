@@ -4,6 +4,7 @@ import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import pg from 'pg';
 import helmet from 'helmet';
+import cors from 'cors';
 import rateLimit from 'express-rate-limit';
 import path from 'node:path';
 import { createHash, randomInt, timingSafeEqual } from 'node:crypto';
@@ -23,6 +24,17 @@ if (!jwtSecret) throw new Error('JWT_SECRET é obrigatória em produção.');
 
 app.disable('x-powered-by');
 app.use(helmet());
+app.use(cors({
+  origin(origin, callback) {
+    if (!origin || origin === 'capacitor://localhost' || /^https?:\/\/localhost(?::\d+)?$/.test(origin)) {
+      callback(null, true);
+      return;
+    }
+    callback(null, false);
+  },
+  methods: ['GET', 'POST', 'PATCH', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization'],
+}));
 app.use(express.json({ limit: '64kb' }));
 app.use(express.static(path.join(__dirname, '..', 'dist')));
 
@@ -127,6 +139,28 @@ function normalizeQuestions(input) {
 
 function generateActivationCode() {
   return String(randomInt(100000, 1000000));
+}
+
+function boundedInt(value, min, max) {
+  const parsed = Number(value);
+  if (!Number.isSafeInteger(parsed)) return null;
+  return Math.min(max, Math.max(min, parsed));
+}
+
+function normalizeTelemetry(input = {}) {
+  const allowedOrientation = new Set(['portrait', 'landscape', 'unknown']);
+  return {
+    platform: cleanText(input.platform, 32) || null,
+    androidVersion: cleanText(input.androidVersion, 32) || null,
+    manufacturer: cleanText(input.manufacturer, 80) || null,
+    model: cleanText(input.model, 120) || null,
+    batteryLevel: boundedInt(input.batteryLevel, 0, 100),
+    charging: typeof input.charging === 'boolean' ? input.charging : null,
+    networkState: cleanText(input.networkState, 32) || null,
+    pendingResponses: boundedInt(input.pendingResponses, 0, 100000) ?? 0,
+    kioskState: cleanText(input.kioskState, 32) || null,
+    orientation: allowedOrientation.has(input.orientation) ? input.orientation : 'unknown',
+  };
 }
 
 async function runMigrations() {
@@ -372,6 +406,10 @@ app.patch('/api/surveys/:id', auth, asyncRoute(async (req, res) => {
         );
       }
     }
+    await client.query(
+      'UPDATE devices SET config_version=config_version+1,updated_at=now() WHERE active_survey_id=$1 AND active=true',
+      [surveyId],
+    );
     await client.query('COMMIT');
     const updated = await pool.query('SELECT * FROM surveys WHERE id=$1', [surveyId]);
     res.json(updated.rows[0]);
@@ -570,6 +608,8 @@ app.get('/api/devices', auth, async (req, res) => {
   }
   const result = await pool.query(
     `SELECT d.id,d.device_id,d.name,d.tenant_id,d.location_id,d.active,d.active_survey_id,d.app_version,d.last_seen_at,d.paired_at,
+            d.status,d.platform,d.android_version,d.manufacturer,d.model,d.battery_level,d.charging,d.network_state,
+            d.pending_responses,d.kiosk_state,d.orientation,d.config_version,
             l.name AS location_name,s.title AS active_survey_title,
             CASE WHEN d.last_seen_at >= now()-interval '90 seconds' THEN 'online' ELSE 'offline' END AS runtime_status
        FROM devices d
@@ -635,11 +675,22 @@ app.patch('/api/devices/:id', auth, asyncRoute(async (req, res) => {
   }
 }));
 
+app.post('/api/devices/:id/refresh-config', auth, asyncRoute(async (req, res) => {
+  const deviceId = asPositiveInt(req.params.id);
+  const device = await loadManagedDevice(req, res, deviceId);
+  if (!device) return;
+  const result = await pool.query(
+    'UPDATE devices SET config_version=config_version+1,updated_at=now() WHERE id=$1 RETURNING config_version',
+    [deviceId],
+  );
+  res.json({ ok: true, configVersion: result.rows[0].config_version });
+}));
+
 app.post('/api/devices/:id/remove-survey', auth, asyncRoute(async (req, res) => {
   const deviceId = asPositiveInt(req.params.id);
   const device = await loadManagedDevice(req, res, deviceId);
   if (!device) return;
-  await pool.query('UPDATE devices SET active_survey_id=NULL,updated_at=now() WHERE id=$1', [deviceId]);
+  await pool.query('UPDATE devices SET active_survey_id=NULL,config_version=config_version+1,updated_at=now() WHERE id=$1', [deviceId]);
   res.json({ ok: true });
 }));
 
@@ -650,7 +701,7 @@ app.post('/api/devices/:id/unpair', auth, asyncRoute(async (req, res) => {
   await pool.query(
     `UPDATE devices
         SET tenant_id=NULL,location_id=NULL,active_survey_id=NULL,activation_code=NULL,
-            activation_expires_at=NULL,paired_at=NULL,status='unknown',updated_at=now()
+            activation_expires_at=NULL,paired_at=NULL,status='unknown',config_version=config_version+1,updated_at=now()
       WHERE id=$1`,
     [deviceId],
   );
@@ -661,7 +712,7 @@ app.delete('/api/devices/:id', auth, asyncRoute(async (req, res) => {
   const deviceId = asPositiveInt(req.params.id);
   const device = await loadManagedDevice(req, res, deviceId);
   if (!device) return;
-  await pool.query('UPDATE devices SET active=false,active_survey_id=NULL,status=\'offline\',updated_at=now() WHERE id=$1', [deviceId]);
+  await pool.query('UPDATE devices SET active=false,active_survey_id=NULL,status=\'offline\',config_version=config_version+1,updated_at=now() WHERE id=$1', [deviceId]);
   res.json({ ok: true, deactivated: true });
 }));
 
@@ -682,7 +733,7 @@ app.post('/api/devices/:id/assign-survey', auth, async (req, res) => {
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
-    await client.query('UPDATE devices SET active_survey_id=$1,updated_at=now() WHERE id=$2', [surveyId, deviceId]);
+    await client.query('UPDATE devices SET active_survey_id=$1,config_version=config_version+1,updated_at=now() WHERE id=$2', [surveyId, deviceId]);
     await client.query('UPDATE surveys SET published=true WHERE id=$1', [surveyId]);
     await client.query('COMMIT');
     res.json({ ok: true });
@@ -694,27 +745,43 @@ app.post('/api/devices/:id/assign-survey', auth, async (req, res) => {
   }
 });
 
-app.post('/api/devices/heartbeat', deviceAuth, async (req, res) => {
+app.post('/api/devices/heartbeat', deviceAuth, asyncRoute(async (req, res) => {
   const appVersion = cleanText(req.body?.appVersion, 40) || 'unknown';
+  const telemetry = normalizeTelemetry(req.body?.telemetry || req.body);
   await pool.query(
-    `UPDATE devices SET status='online',app_version=$1,last_seen_at=now(),updated_at=now() WHERE id=$2 AND active=true`,
-    [appVersion, req.device.id],
+    `UPDATE devices
+        SET status='online',app_version=$1,platform=$2,android_version=$3,manufacturer=$4,model=$5,
+            battery_level=$6,charging=$7,network_state=$8,pending_responses=$9,kiosk_state=$10,
+            orientation=$11,last_seen_at=now(),updated_at=now()
+      WHERE id=$12 AND active=true`,
+    [appVersion, telemetry.platform, telemetry.androidVersion, telemetry.manufacturer, telemetry.model,
+      telemetry.batteryLevel, telemetry.charging, telemetry.networkState, telemetry.pendingResponses,
+      telemetry.kioskState, telemetry.orientation, req.device.id],
   );
-  res.json({ ok: true });
-});
+  const currentConfigVersion = asPositiveInt(req.body?.currentConfigVersion);
+  res.json({
+    ok: true,
+    configVersion: req.device.config_version,
+    configChanged: currentConfigVersion !== req.device.config_version,
+  });
+}));
 
-app.get('/api/devices/config', deviceAuth, async (req, res) => {
+app.get('/api/devices/config', deviceAuth, asyncRoute(async (req, res) => {
   await pool.query("UPDATE devices SET status='online',last_seen_at=now(),updated_at=now() WHERE id=$1 AND active=true", [req.device.id]);
-  if (!req.device.tenant_id) return res.json({ status: 'unpaired', deviceId: req.device.device_id, survey: null });
+  const currentConfigVersion = asPositiveInt(req.query.currentConfigVersion);
+  if (currentConfigVersion && currentConfigVersion === req.device.config_version) {
+    return res.json({ status: 'unchanged', deviceId: req.device.device_id, configVersion: req.device.config_version });
+  }
+  if (!req.device.tenant_id) return res.json({ status: 'unpaired', deviceId: req.device.device_id, configVersion: req.device.config_version, survey: null });
   if (!req.device.active_survey_id) {
-    return res.json({ status: 'paired', deviceId: req.device.device_id, deviceName: req.device.name, survey: null });
+    return res.json({ status: 'paired', deviceId: req.device.device_id, deviceName: req.device.name, configVersion: req.device.config_version, survey: null });
   }
 
   const survey = await pool.query(
     'SELECT id,title,description,theme FROM surveys WHERE id=$1 AND tenant_id=$2 AND published=true',
     [req.device.active_survey_id, req.device.tenant_id],
   );
-  if (!survey.rowCount) return res.json({ status: 'paired', survey: null });
+  if (!survey.rowCount) return res.json({ status: 'paired', configVersion: req.device.config_version, survey: null });
   const questions = await pool.query(
     'SELECT id,text,type,position,options FROM questions WHERE survey_id=$1 ORDER BY position,id',
     [survey.rows[0].id],
@@ -723,9 +790,10 @@ app.get('/api/devices/config', deviceAuth, async (req, res) => {
     status: 'paired',
     deviceId: req.device.device_id,
     deviceName: req.device.name,
+    configVersion: req.device.config_version,
     survey: { ...survey.rows[0], questions: questions.rows },
   });
-});
+}));
 
 app.post('/api/devices/responses', deviceAuth, async (req, res) => {
   const surveyId = asPositiveInt(req.body?.surveyId);

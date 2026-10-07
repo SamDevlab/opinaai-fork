@@ -10,6 +10,7 @@
 .lower-grid { margin-top:22px; }
 .device-row { display:flex; justify-content:space-between; align-items:center; gap:18px; padding:18px 0; border-top:1px solid #e5ebf3; }
 .device-row:first-child { border-top:0; }
+.device-row > div:first-child { flex:1; min-width:260px; }
 .device-row strong, .device-row small { display:block; }
 .device-row small { margin-top:5px; color:#7b8799; }
 .device-assign { display:flex; align-items:center; justify-content:flex-end; flex-wrap:wrap; gap:8px; min-width:min(620px, 58%); }

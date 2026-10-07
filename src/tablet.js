@@ -1,4 +1,5 @@
 import './tablet.css';
+import { apiUrl, isNativeRuntime } from './api.js';
 
 const KEYS = {
   deviceId: 'opina_device_id',
@@ -6,8 +7,10 @@ const KEYS = {
   activation: 'opina_activation_code',
   pending: 'opina_pending_responses',
   surveyCache: 'opina_last_valid_survey',
+  configVersion: 'opina_config_version',
 };
-const APP_VERSION = 'web-kiosk/0.3.0';
+const WEB_APP_VERSION = 'web-kiosk/0.3.0';
+const ANDROID_APP_VERSION = 'android-kiosk/1.1.0';
 const MAX_PENDING = 200;
 
 function randomSecret() {
@@ -27,12 +30,41 @@ async function sha256(value) {
   return [...new Uint8Array(digest)].map((byte) => byte.toString(16).padStart(2, '0')).join('');
 }
 
-function identity() {
+function secureStorage() {
+  return globalThis.Capacitor?.Plugins?.OpinaSecureStorage || null;
+}
+
+async function secureGet(key) {
+  const plugin = secureStorage();
+  if (!plugin?.get) return localStorage.getItem(key);
+  try {
+    const result = await plugin.get({ key });
+    return result?.value || null;
+  } catch {
+    return localStorage.getItem(key);
+  }
+}
+
+async function secureSet(key, value) {
+  const plugin = secureStorage();
+  if (!plugin?.set) {
+    localStorage.setItem(key, value);
+    return;
+  }
+  try {
+    await plugin.set({ key, value });
+    localStorage.removeItem(key);
+  } catch {
+    localStorage.setItem(key, value);
+  }
+}
+
+async function identity() {
   let deviceId = localStorage.getItem(KEYS.deviceId);
-  let secret = localStorage.getItem(KEYS.secret);
+  let secret = await secureGet(KEYS.secret);
   let activation = localStorage.getItem(KEYS.activation);
   if (!deviceId) { deviceId = crypto.randomUUID(); localStorage.setItem(KEYS.deviceId, deviceId); }
-  if (!secret) { secret = randomSecret(); localStorage.setItem(KEYS.secret, secret); }
+  if (!secret) { secret = randomSecret(); await secureSet(KEYS.secret, secret); }
   if (!activation) { activation = activationCode(); localStorage.setItem(KEYS.activation, activation); }
   return { deviceId, secret, activation };
 }
@@ -44,11 +76,15 @@ function ensureActivation(id) {
   localStorage.setItem(KEYS.activation, id.activation);
 }
 
+function appVersion() {
+  return isNativeRuntime() ? ANDROID_APP_VERSION : WEB_APP_VERSION;
+}
+
 async function deviceRequest(path, id, options = {}) {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 8_000);
   try {
-    const response = await fetch(path, {
+    const response = await fetch(apiUrl(path), {
       ...options,
       signal: controller.signal,
       headers: {
@@ -94,8 +130,38 @@ function cachedSurvey() {
   catch { return null; }
 }
 
-function saveSurveyCache(survey) {
-  if (survey?.id && Array.isArray(survey.questions)) localStorage.setItem(KEYS.surveyCache, JSON.stringify(survey));
+function currentConfigVersion() {
+  return Number(localStorage.getItem(KEYS.configVersion) || 0) || 0;
+}
+
+function saveSurveyCache(survey, configVersion) {
+  if (survey?.id && Array.isArray(survey.questions)) {
+    localStorage.setItem(KEYS.surveyCache, JSON.stringify(survey));
+    if (Number.isSafeInteger(Number(configVersion)) && Number(configVersion) > 0) {
+      localStorage.setItem(KEYS.configVersion, String(configVersion));
+    }
+  }
+}
+
+async function runtimeTelemetry() {
+  const plugin = globalThis.Capacitor?.Plugins?.OpinaRuntime;
+  const fallback = {
+    platform: isNativeRuntime() ? 'android' : 'web',
+    androidVersion: null,
+    manufacturer: null,
+    model: null,
+    batteryLevel: null,
+    charging: null,
+    networkState: navigator.onLine ? 'online' : 'offline',
+    kioskState: 'active',
+    orientation: screen.orientation?.type?.startsWith('portrait') ? 'portrait' : 'unknown',
+  };
+  if (!plugin?.getInfo) return fallback;
+  try {
+    return { ...fallback, ...(await plugin.getInfo()) };
+  } catch {
+    return fallback;
+  }
 }
 
 function isTransientError(error) {
@@ -103,16 +169,23 @@ function isTransientError(error) {
 }
 
 export async function renderTablet(root) {
-  const id = identity();
   let activeSurvey = null;
   let busy = false;
 
   root.innerHTML = '<main class="tablet-shell"><section class="tablet-card"><p class="tablet-kicker">OPINA AI</p><h1>Preparando este tablet...</h1><p class="tablet-copy">Conectando ao serviço.</p></section></main>';
+  const id = await identity();
 
   async function register() {
     ensureActivation(id);
     const body = { deviceId: id.deviceId, activationCode: id.activation, deviceSecretHash: await sha256(id.secret) };
-    const response = await fetch('/api/devices/register', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 8000);
+    let response;
+    try {
+      response = await fetch(apiUrl('/api/devices/register'), { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body), signal: controller.signal });
+    } finally {
+      clearTimeout(timeout);
+    }
     const data = await response.json().catch(() => ({}));
     if (response.status === 409 && data.error === 'activation_code_conflict') {
       id.activation = activationCode();
@@ -167,18 +240,20 @@ export async function renderTablet(root) {
     busy = true;
     form.querySelectorAll('input,button').forEach((element) => { element.disabled = true; });
     const submission = { surveyId: activeSurvey.id, submissionId: crypto.randomUUID(), answeredAt: new Date().toISOString(), answers };
+    const queuedBeforeSend = pendingQueue();
+    queuedBeforeSend.push(submission);
+    saveQueue(queuedBeforeSend);
     let queued = false;
     try {
       await deviceRequest('/api/devices/responses', id, { method: 'POST', body: JSON.stringify({ deviceId: id.deviceId, ...submission }) });
+      saveQueue(pendingQueue().filter((item) => item.submissionId !== submission.submissionId));
     } catch (error) {
       if (!isTransientError(error)) {
+        saveQueue(pendingQueue().filter((item) => item.submissionId !== submission.submissionId));
         busy = false;
         renderSurvey(activeSurvey);
         return;
       }
-      const queue = pendingQueue();
-      queue.push(submission);
-      saveQueue(queue);
       queued = true;
     }
     const submittedSurvey = activeSurvey;
@@ -209,7 +284,7 @@ export async function renderTablet(root) {
 
   async function refreshConfig() {
     try {
-      const config = await deviceRequest(`/api/devices/config?deviceId=${encodeURIComponent(id.deviceId)}`, id);
+      const config = await deviceRequest(`/api/devices/config?deviceId=${encodeURIComponent(id.deviceId)}&currentConfigVersion=${currentConfigVersion()}`, id);
       if (config.status === 'unpaired') {
         activeSurvey = null;
         ensureActivation(id);
@@ -219,8 +294,15 @@ export async function renderTablet(root) {
       }
       localStorage.removeItem(KEYS.activation);
       await flushPending();
+      if (config.status === 'unchanged') {
+        if (!activeSurvey) {
+          const cached = cachedSurvey();
+          if (cached) renderSurvey(cached);
+        }
+        return;
+      }
       if (!config.survey) { activeSurvey = null; renderWaiting(config.deviceName); return; }
-      saveSurveyCache(config.survey);
+      saveSurveyCache(config.survey, config.configVersion);
       if (!activeSurvey || activeSurvey.id !== config.survey.id || !root.querySelector('#kiosk-form')) renderSurvey(config.survey);
     } catch {
       const cached = cachedSurvey();
@@ -231,7 +313,17 @@ export async function renderTablet(root) {
 
   async function heartbeat() {
     try {
-      await deviceRequest('/api/devices/heartbeat', id, { method: 'POST', body: JSON.stringify({ deviceId: id.deviceId, appVersion: APP_VERSION }) });
+      const telemetry = await runtimeTelemetry();
+      await deviceRequest('/api/devices/heartbeat', id, {
+        method: 'POST',
+        body: JSON.stringify({
+          deviceId: id.deviceId,
+          appVersion: appVersion(),
+          currentConfigVersion: currentConfigVersion(),
+          ...telemetry,
+          pendingResponses: pendingQueue().length,
+        }),
+      });
       await flushPending();
     } catch { /* o polling seguinte tenta novamente */ }
   }
