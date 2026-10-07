@@ -149,7 +149,7 @@ async function renderDashboard(root, user) {
       <section class="dashboard-card"><div class="card-title"><h3>Tablets</h3><span id="device-count">Carregando...</span></div><div id="device-list"></div></section>
       <section class="dashboard-grid lower-grid">
         <article class="dashboard-card"><h3>Pesquisas</h3><div id="survey-list">Carregando...</div></article>
-        <article class="dashboard-card"><div class="card-title"><h3>Respostas</h3><span id="report-total">Carregando...</span></div><div class="date-row"><label>De <input id="from" type="date"></label><label>Até <input id="to" type="date"></label></div><button id="load-report" class="outline-button">Atualizar período</button><div id="report-list"></div></article>
+        <article class="dashboard-card report-card"><div class="card-title"><h3>Relatório de satisfação</h3><span id="report-total">Carregando...</span></div><div class="date-row"><label>De <input id="from" type="date"></label><label>Até <input id="to" type="date"></label></div><div class="report-filters"><label>Pesquisa<select id="report-survey"><option value="">Todas</option></select></label><label>Unidade<select id="report-location"><option value="">Todas</option></select></label><label>Tablet<select id="report-device"><option value="">Todos</option></select></label></div><button id="load-report" class="outline-button">Atualizar relatório</button><div id="report-metrics" class="metric-grid"></div><div id="report-distribution" class="distribution-list"></div><div id="report-list"></div></article>
       </section>
     </main>`;
 
@@ -220,6 +220,11 @@ async function renderDashboard(root, user) {
     if (selectedTenantId) reportParams.set('tenantId', selectedTenantId);
     if (root.querySelector('#from').value) reportParams.set('from', root.querySelector('#from').value);
     if (root.querySelector('#to').value) reportParams.set('to', root.querySelector('#to').value);
+    const reportFilterNames = { 'report-survey': 'surveyId', 'report-location': 'locationId', 'report-device': 'deviceId' };
+    for (const id of Object.keys(reportFilterNames)) {
+      const value = root.querySelector(`#${id}`).value;
+      if (value) reportParams.set(reportFilterNames[id], value);
+    }
     const [surveys, devices, reports] = await Promise.all([
       api(`/api/surveys${suffix}`),
       api(`/api/devices${suffix}`),
@@ -227,14 +232,14 @@ async function renderDashboard(root, user) {
     ]);
 
     root.querySelector('#survey-list').innerHTML = surveys.length
-      ? surveys.map((survey) => `<div class="survey-row"><strong>${escapeHtml(survey.title)}</strong><span>${survey.published ? 'Em uso' : 'Ainda não atribuída'}</span></div>`).join('')
+      ? surveys.map((survey) => `<div class="survey-row"><div><strong>${escapeHtml(survey.title)}</strong><small>${survey.assigned_devices || 0} tablet(s) associado(s)</small></div><div class="row-actions"><span>${survey.published ? 'Ativa' : 'Inativa'}</span><button class="outline-button edit-survey" data-survey="${survey.id}">Editar</button><button class="outline-button toggle-survey" data-survey="${survey.id}" data-published="${survey.published}">${survey.published ? 'Desativar' : 'Ativar'}</button></div></div>`).join('')
       : '<p class="empty-state">Nenhuma pesquisa cadastrada.</p>';
 
     root.querySelector('#device-count').textContent = `${devices.length} dispositivo(s)`;
     root.querySelector('#device-list').innerHTML = devices.length ? devices.map((device) => `
-      <div class="device-row">
-        <div><strong>${escapeHtml(device.name)}</strong><small>${escapeHtml(device.location_name || 'Sem unidade')} · ${device.runtime_status === 'online' ? 'Online' : 'Offline'}${device.app_version ? ` · ${escapeHtml(device.app_version)}` : ''}</small></div>
-        <div class="device-assign"><select data-survey-for="${device.id}"><option value="">Escolha uma pesquisa</option>${surveys.map((survey) => `<option value="${survey.id}" ${String(survey.id) === String(device.active_survey_id) ? 'selected' : ''}>${escapeHtml(survey.title)}</option>`).join('')}</select><button class="outline-button assign-button" data-device="${device.id}">Aplicar</button></div>
+      <div class="device-row ${device.active ? '' : 'device-row--inactive'}">
+        <div><strong>${escapeHtml(device.name)}</strong><small>${escapeHtml(device.location_name || 'Sem unidade')} · ${device.runtime_status === 'online' ? 'Online' : 'Offline'}${device.app_version ? ` · ${escapeHtml(device.app_version)}` : ''}${device.last_seen_at ? ` · visto ${escapeHtml(new Date(device.last_seen_at).toLocaleString('pt-BR'))}` : ''}${device.active ? '' : ' · Desativado'}</small></div>
+        <div class="device-assign"><select data-survey-for="${device.id}"><option value="">Escolha uma pesquisa</option>${surveys.map((survey) => `<option value="${survey.id}" ${String(survey.id) === String(device.active_survey_id) ? 'selected' : ''}>${escapeHtml(survey.title)}</option>`).join('')}</select><button class="outline-button assign-button" data-device="${device.id}">Aplicar</button><button class="outline-button clear-survey" data-device="${device.id}">Remover pesquisa</button><button class="outline-button edit-device" data-device="${device.id}" data-name="${escapeHtml(device.name)}" data-location="${escapeHtml(device.location_name || '')}">Editar</button><button class="outline-button unpair-device" data-device="${device.id}">Desparear</button>${device.active ? `<button class="outline-button danger-button deactivate-device" data-device="${device.id}">Desativar</button>` : ''}</div>
       </div>`).join('') : '<p class="empty-state">Nenhum tablet pareado.</p>';
 
     root.querySelectorAll('.assign-button').forEach((button) => {
@@ -247,11 +252,57 @@ async function renderDashboard(root, user) {
       };
     });
 
-    const total = reports.reduce((sum, row) => sum + Number(row.total || 0), 0);
-    root.querySelector('#report-total').textContent = `${total} resposta(s)`;
-    root.querySelector('#report-list').innerHTML = reports.length
-      ? reports.slice(0, 30).map((row) => `<p><strong>${escapeHtml(row.survey_title)}</strong> · ${escapeHtml(row.location_name || row.device_name || 'Tablet')} · ${escapeHtml(row.day)}: ${row.total}</p>`).join('')
+    root.querySelector('#report-survey').innerHTML = `<option value="">Todas</option>${surveys.map((survey) => `<option value="${survey.id}">${escapeHtml(survey.title)}</option>`).join('')}`;
+    root.querySelector('#report-location').innerHTML = `<option value="">Todas</option>${[...new Map(devices.filter((device) => device.location_id).map((device) => [device.location_id, device.location_name])).entries()].map(([id, name]) => `<option value="${id}">${escapeHtml(name)}</option>`).join('')}`;
+    root.querySelector('#report-device').innerHTML = `<option value="">Todos</option>${devices.map((device) => `<option value="${device.id}">${escapeHtml(device.name)}</option>`).join('')}`;
+    const report = reports?.metrics ? reports : { metrics: { total: 0, averageScore: null, satisfiedRate: 0, neutralRate: 0, dissatisfiedRate: 0 }, distribution: [], rows: [] };
+    const metrics = report.metrics;
+    root.querySelector('#report-total').textContent = `${metrics.total} avaliação(ões)`;
+    root.querySelector('#report-metrics').innerHTML = `<div class="metric-card"><strong>${metrics.total}</strong><span>Avaliações</span></div><div class="metric-card"><strong>${Number(metrics.satisfiedRate || 0).toLocaleString('pt-BR')}%</strong><span>Satisfeitos</span></div><div class="metric-card"><strong>${metrics.averageScore === null ? '—' : Number(metrics.averageScore).toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}</strong><span>Média (1–5)</span></div><div class="metric-card"><strong>${Number(metrics.dissatisfiedRate || 0).toLocaleString('pt-BR')}%</strong><span>Insatisfeitos</span></div>`;
+    root.querySelector('#report-distribution').innerHTML = report.distribution?.length
+      ? report.distribution.map((item) => `<div class="distribution-row"><span class="distribution-label">${item.emoji} ${escapeHtml(item.label)}</span><span class="distribution-bar"><i style="width:${metrics.total ? Math.min(100, (item.count / metrics.total) * 100) : 0}%"></i></span><strong>${item.count}</strong></div>`).join('')
+      : '<p class="empty-state">Sem distribuição no período.</p>';
+    root.querySelector('#report-list').innerHTML = report.rows?.length
+      ? report.rows.slice(0, 30).map((row) => `<p><strong>${escapeHtml(row.survey_title)}</strong> · ${escapeHtml(row.location_name || row.device_name || 'Tablet')} · ${escapeHtml(row.day)}: ${row.total}</p>`).join('')
       : '<p class="empty-state">Sem respostas no período.</p>';
+
+    root.querySelectorAll('.clear-survey').forEach((button) => {
+      button.onclick = async () => { button.disabled = true; try { await api(`/api/devices/${button.dataset.device}/remove-survey`, { method: 'POST' }); await loadDashboardData(); } finally { button.disabled = false; } };
+    });
+    root.querySelectorAll('.edit-device').forEach((button) => {
+      button.onclick = async () => {
+        const name = prompt('Nome do tablet', button.dataset.name);
+        if (name === null) return;
+        const locationName = prompt('Unidade / local', button.dataset.location || 'Recepção');
+        if (locationName === null) return;
+        await api(`/api/devices/${button.dataset.device}`, { method: 'PATCH', body: JSON.stringify({ name, locationName }) });
+        await loadDashboardData();
+      };
+    });
+    root.querySelectorAll('.unpair-device').forEach((button) => {
+      button.onclick = async () => { if (!confirm('Desparear este tablet? A pesquisa ativa será removida.')) return; await api(`/api/devices/${button.dataset.device}/unpair`, { method: 'POST' }); await loadDashboardData(); };
+    });
+    root.querySelectorAll('.deactivate-device').forEach((button) => {
+      button.onclick = async () => { if (!confirm('Desativar este tablet?')) return; await api(`/api/devices/${button.dataset.device}`, { method: 'DELETE' }); await loadDashboardData(); };
+    });
+    root.querySelectorAll('.edit-survey').forEach((button) => {
+      button.onclick = async () => {
+        const survey = await api(`/api/surveys/${button.dataset.survey}`);
+        const question = survey.questions?.[0];
+        const title = prompt('Título da pesquisa', survey.title);
+        if (title === null) return;
+        const questionText = prompt('Pergunta', question?.text || survey.description || '');
+        if (questionText === null) return;
+        const options = question?.type === 'options' ? prompt('Opções separadas por vírgula', (question.options || []).join(', ')) : null;
+        const nextQuestion = { text: questionText, type: question?.type || 'emoji', options: options === null ? (question?.options || []) : options.split(',').map((item) => item.trim()).filter(Boolean) };
+        await api(`/api/surveys/${survey.id}`, { method: 'PATCH', body: JSON.stringify({ title, description: questionText, questions: [nextQuestion] }) });
+        await loadDashboardData();
+      };
+    });
+    root.querySelectorAll('.toggle-survey').forEach((button) => {
+      button.onclick = async () => { await api(`/api/surveys/${button.dataset.survey}`, { method: 'PATCH', body: JSON.stringify({ published: button.dataset.published !== 'true' }) }); await loadDashboardData(); };
+    });
+    for (const id of ['report-survey', 'report-location', 'report-device']) root.querySelector(`#${id}`).onchange = loadDashboardData;
   }
 
   await loadDashboardData();
