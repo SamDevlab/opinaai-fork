@@ -171,6 +171,15 @@ function isTransientError(error) {
 export async function renderTablet(root) {
   let activeSurvey = null;
   let busy = false;
+  const browserTestMode = !isNativeRuntime();
+
+  if (browserTestMode) {
+    renderSurvey({
+      id: 'browser-test-survey',
+      questions: [{ id: 'browser-test-question', text: 'Como você avalia sua experiência conosco?', type: 'stars', options: [] }],
+    });
+    return;
+  }
 
   root.innerHTML = '<main class="tablet-shell"><section class="tablet-card"><p class="tablet-kicker">OPINA AI</p><h1>Preparando este tablet...</h1><p class="tablet-copy">Conectando ao serviço.</p></section></main>';
   const id = await identity();
@@ -209,7 +218,7 @@ export async function renderTablet(root) {
     const questions = Array.isArray(survey.questions) ? survey.questions : [];
     const starConfirmation = questions.length === 1 && questions[0]?.type === 'stars';
     const quickSubmit = questions.length === 1 && !starConfirmation;
-    root.innerHTML = `<main class="tablet-shell"><section class="survey-kiosk"><header><p class="tablet-kicker">SUA OPINIÃO IMPORTA</p></header><form id="kiosk-form" data-quick-submit="${quickSubmit}">${questions.map(renderQuestion).join('')}${quickSubmit || starConfirmation ? '' : '<button class="kiosk-submit" type="submit">Enviar avaliação</button>'}</form><footer>Opina AI · Pesquisa de satisfação</footer></section></main>`;
+    root.innerHTML = `<main class="tablet-shell"><section class="survey-kiosk"><header><p class="tablet-kicker">SUA OPINIÃO IMPORTA</p>${browserTestMode ? '<p class="browser-test-badge">MODO DE TESTE · NENHUMA RESPOSTA É ENVIADA</p>' : ''}</header><form id="kiosk-form" data-quick-submit="${quickSubmit}">${questions.map(renderQuestion).join('')}${quickSubmit || starConfirmation ? '' : '<button class="kiosk-submit" type="submit">Enviar avaliação</button>'}</form><footer>Opina AI · Pesquisa de satisfação</footer></section></main>`;
     const form = root.querySelector('#kiosk-form');
     form.onsubmit = submitSurvey;
     if (quickSubmit) form.addEventListener('change', submitSurvey);
@@ -256,6 +265,15 @@ export async function renderTablet(root) {
     }
     busy = true;
     form.querySelectorAll('input,button').forEach((element) => { element.disabled = true; });
+    if (browserTestMode) {
+      const submittedSurvey = activeSurvey;
+      renderThanks(false);
+      setTimeout(() => {
+        busy = false;
+        if (activeSurvey?.id === submittedSurvey.id && !root.querySelector('#kiosk-form')) renderSurvey(submittedSurvey);
+      }, 2200);
+      return;
+    }
     const submission = { surveyId: activeSurvey.id, submissionId: crypto.randomUUID(), answeredAt: new Date().toISOString(), answers };
     const queuedBeforeSend = pendingQueue();
     queuedBeforeSend.push(submission);
@@ -282,7 +300,9 @@ export async function renderTablet(root) {
   }
 
   function renderThanks(queued) {
-    root.innerHTML = `<main class="tablet-shell"><section class="tablet-card thanks-card"><div class="thanks-icon">✓</div><h1>Obrigado pela sua opinião!</h1><p class="tablet-copy">${queued ? 'A avaliação ficou salva neste tablet e será sincronizada quando a conexão voltar.' : 'Sua avaliação foi registrada com sucesso.'}</p></section></main>`;
+    const title = browserTestMode ? 'Teste concluído' : 'Obrigado pela sua opinião!';
+    const copy = browserTestMode ? 'Nenhuma resposta foi enviada ou salva. Este tablet do navegador serve apenas para testar a experiência.' : (queued ? 'A avaliação ficou salva neste tablet e será sincronizada quando a conexão voltar.' : 'Sua avaliação foi registrada com sucesso.');
+    root.innerHTML = `<main class="tablet-shell"><section class="tablet-card thanks-card"><div class="thanks-icon">✓</div><h1>${title}</h1><p class="tablet-copy">${copy}</p></section></main>`;
   }
 
   async function flushPending() {

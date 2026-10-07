@@ -155,7 +155,7 @@ async function renderDashboard(root, user) {
       <section class="dashboard-content">
         <header class="dashboard-topbar">
           <div class="mobile-brand"><span class="brand-symbol" aria-hidden="true">${dashboardIcon('spark')}</span><strong>Opina <em>AI</em></strong></div>
-          <div class="topbar-actions"><a class="primary-button" href="/tablet" target="_blank">Abrir modo tablet <span aria-hidden="true">↗</span></a><button id="logout" class="topbar-logout" type="button">Sair</button></div>
+          <div class="topbar-actions"><a class="primary-button" href="/tablet" target="_blank">Abrir tablet de teste <span aria-hidden="true">↗</span></a><button id="logout" class="topbar-logout" type="button">Sair</button></div>
         </header>
         <section id="overview" class="dashboard-page-header">
           <div><p class="section-kicker">PAINEL</p><h1 id="page-title">Visão geral</h1><p id="page-subtitle" class="page-subtitle">Acompanhe as avaliações e a operação dos tablets.</p></div>
