@@ -207,17 +207,31 @@ export async function renderTablet(root) {
   function renderSurvey(survey) {
     activeSurvey = survey;
     const questions = Array.isArray(survey.questions) ? survey.questions : [];
-    const quickSubmit = questions.length === 1;
-    root.innerHTML = `<main class="tablet-shell"><section class="survey-kiosk"><header><p class="tablet-kicker">SUA OPINIÃO IMPORTA</p></header><form id="kiosk-form" data-quick-submit="${quickSubmit}">${questions.map(renderQuestion).join('')}${quickSubmit ? '' : '<button class="kiosk-submit" type="submit">Enviar avaliação</button>'}</form><footer>Opina AI · Pesquisa de satisfação</footer></section></main>`;
+    const starConfirmation = questions.length === 1 && questions[0]?.type === 'stars';
+    const quickSubmit = questions.length === 1 && !starConfirmation;
+    root.innerHTML = `<main class="tablet-shell"><section class="survey-kiosk"><header><p class="tablet-kicker">SUA OPINIÃO IMPORTA</p></header><form id="kiosk-form" data-quick-submit="${quickSubmit}">${questions.map(renderQuestion).join('')}${quickSubmit || starConfirmation ? '' : '<button class="kiosk-submit" type="submit">Enviar avaliação</button>'}</form><footer>Opina AI · Pesquisa de satisfação</footer></section></main>`;
     const form = root.querySelector('#kiosk-form');
     form.onsubmit = submitSurvey;
     if (quickSubmit) form.addEventListener('change', submitSurvey);
+    form.querySelectorAll('.stars-grid').forEach((grid) => {
+      const inputs = [...grid.querySelectorAll('input')];
+      const confirmation = form.querySelector(`[data-stars-confirm="${grid.dataset.starsQuestion}"]`);
+      inputs.forEach((input) => input.addEventListener('change', () => {
+        const selectedValue = Number(input.value);
+        inputs.forEach((item) => item.closest('label')?.classList.toggle('is-filled', Number(item.value) <= selectedValue));
+        if (confirmation) {
+          confirmation.hidden = false;
+          confirmation.querySelector('[data-stars-value]').textContent = input.value;
+        }
+      }));
+      confirmation?.querySelector('.stars-confirm-button')?.addEventListener('click', () => submitSurvey({ preventDefault() {}, currentTarget: form }));
+    });
   }
 
   function renderQuestion(question) {
     const name = `q-${question.id}`;
     if (question.type === 'stars') {
-      return `<fieldset class="question"><legend>${escapeHtml(question.text)}</legend><div class="stars-grid">${Array.from({ length: 5 }, (_, index) => index + 1).map((value) => `<label><input type="radio" name="${name}" value="${value}" required><span class="star-choice" aria-label="${value} estrela${value === 1 ? '' : 's'}">★</span></label>`).join('')}</div></fieldset>`;
+      return `<fieldset class="question"><legend>${escapeHtml(question.text)}</legend><div class="stars-grid" data-stars-question="${name}">${Array.from({ length: 5 }, (_, index) => index + 1).map((value) => `<label><input type="radio" name="${name}" value="${value}" required><span class="star-choice" aria-label="${value} estrela${value === 1 ? '' : 's'}">★</span><small class="star-number">${value}</small></label>`).join('')}</div><div class="stars-confirmation" data-stars-confirm="${name}" hidden><p>Você confirma sua nota? <strong data-stars-value>0</strong></p><button class="stars-confirm-button" type="button">Sim</button></div></fieldset>`;
     }
     if (question.type === 'scale') {
       return `<fieldset class="question"><legend>${escapeHtml(question.text)}</legend><div class="scale-grid">${Array.from({ length: 10 }, (_, index) => index + 1).map((value) => `<label><input type="radio" name="${name}" value="${value}" required><span>${value}</span></label>`).join('')}</div></fieldset>`;
