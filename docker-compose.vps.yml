@@ -6,19 +6,22 @@ services:
     environment:
       POSTGRES_DB: opina_ai
       POSTGRES_USER: opina_ai
-      POSTGRES_PASSWORD: opina_ai_change_me
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?defina POSTGRES_PASSWORD}
     volumes:
       - opinaai_pgdata:/var/lib/postgresql/data
-      - ./server/schema.sql:/docker-entrypoint-initdb.d/001-schema.sql:ro
     networks: [opinaai]
   app:
     build: .
     container_name: opinaai-app
     restart: unless-stopped
     environment:
+      NODE_ENV: production
       PORT: 4000
-      DATABASE_URL: postgres://opina_ai:opina_ai_change_me@db:5432/opina_ai
-      JWT_SECRET: change-this-opinaai-jwt-secret
+      DATABASE_URL: postgres://opina_ai:${POSTGRES_PASSWORD}@db:5432/opina_ai
+      JWT_SECRET: ${JWT_SECRET:?defina JWT_SECRET}
+      BOOTSTRAP_ADMIN_NAME: ${BOOTSTRAP_ADMIN_NAME:-Administrador Opina AI}
+      BOOTSTRAP_ADMIN_EMAIL: ${BOOTSTRAP_ADMIN_EMAIL:-}
+      BOOTSTRAP_ADMIN_PASSWORD: ${BOOTSTRAP_ADMIN_PASSWORD:-}
     depends_on: [db]
     ports:
       - "127.0.0.1:4010:4000"
