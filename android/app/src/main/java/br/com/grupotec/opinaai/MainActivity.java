@@ -1,6 +1,9 @@
 package br.com.grupotec.opinaai;
 
 import android.os.Bundle;
+import android.app.admin.DevicePolicyManager;
+import android.content.ComponentName;
+import android.content.Context;
 import android.view.View;
 import android.view.Window;
 import android.webkit.WebSettings;
@@ -23,10 +26,10 @@ public class MainActivity extends BridgeActivity {
         if (getBridge() != null && getBridge().getWebView() != null) {
             WebSettings settings = getBridge().getWebView().getSettings();
             settings.setDomStorageEnabled(true);
-            settings.setMixedContentMode(WebSettings.MIXED_CONTENT_COMPATIBILITY_MODE);
             getBridge().getWebView().setOverScrollMode(View.OVER_SCROLL_NEVER);
         }
         hideSystemUi();
+        enableKioskMode();
     }
 
     @Override
@@ -35,11 +38,52 @@ public class MainActivity extends BridgeActivity {
         if (hasFocus) hideSystemUi();
     }
 
+    @Override
+    public void onResume() {
+        super.onResume();
+        hideSystemUi();
+        enableKioskMode();
+    }
+
     private void hideSystemUi() {
         Window window = getWindow();
         WindowCompat.setDecorFitsSystemWindows(window, false);
         WindowInsetsControllerCompat controller = WindowCompat.getInsetsController(window, window.getDecorView());
         controller.hide(WindowInsetsCompat.Type.systemBars());
         controller.setSystemBarsBehavior(WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE);
+    }
+
+    private void enableKioskMode() {
+        DevicePolicyManager policy = (DevicePolicyManager) getSystemService(Context.DEVICE_POLICY_SERVICE);
+        ComponentName admin = new ComponentName(this, OpinaDeviceAdminReceiver.class);
+        if (policy != null && policy.isDeviceOwnerApp(getPackageName())) {
+            policy.setLockTaskPackages(admin, new String[]{getPackageName()});
+        }
+        if (policy == null || (!policy.isDeviceOwnerApp(getPackageName()) && !policy.isLockTaskPermitted(getPackageName()))) return;
+        try {
+            if (!isInLockTaskMode()) startLockTask();
+        } catch (SecurityException | IllegalStateException ignored) {
+            // The current device owner may revoke kiosk permission while the app is running.
+        }
+    }
+
+    private boolean isInLockTaskMode() {
+        if (android.os.Build.VERSION.SDK_INT < android.os.Build.VERSION_CODES.M) return false;
+        ActivityManagerState state = new ActivityManagerState(this);
+        return state.isLocked();
+    }
+
+    private static final class ActivityManagerState {
+        private final android.app.ActivityManager manager;
+
+        private ActivityManagerState(Context context) {
+            manager = (android.app.ActivityManager) context.getSystemService(Context.ACTIVITY_SERVICE);
+        }
+
+        private boolean isLocked() {
+            if (manager == null) return false;
+            int state = manager.getLockTaskModeState();
+            return state != android.app.ActivityManager.LOCK_TASK_MODE_NONE;
+        }
     }
 }

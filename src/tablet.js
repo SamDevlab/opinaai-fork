@@ -174,9 +174,15 @@ export async function renderTablet(root) {
   const browserTestMode = !isNativeRuntime();
 
   if (browserTestMode) {
+    const browserTestType = new URLSearchParams(location.search).get('type') === 'emoji' ? 'emoji' : 'stars';
     renderSurvey({
       id: 'browser-test-survey',
-      questions: [{ id: 'browser-test-question', text: 'Como você avalia sua experiência conosco?', type: 'stars', options: [] }],
+      questions: [{
+        id: 'browser-test-question',
+        text: browserTestType === 'emoji' ? 'Como você avalia seu atendimento?' : 'Como você avalia sua experiência conosco?',
+        type: browserTestType,
+        options: [],
+      }],
     });
     return;
   }

@@ -21,12 +21,15 @@ const pool = new Pool({
 
 const jwtSecret = process.env.JWT_SECRET || (process.env.NODE_ENV === 'production' ? null : 'dev-only-change-me');
 if (!jwtSecret) throw new Error('JWT_SECRET é obrigatória em produção.');
+const allowedCorsOrigins = new Set(
+  String(process.env.CORS_ORIGINS || '').split(',').map((origin) => origin.trim()).filter(Boolean),
+);
 
 app.disable('x-powered-by');
 app.use(helmet());
 app.use(cors({
   origin(origin, callback) {
-    if (!origin || origin === 'capacitor://localhost' || /^https?:\/\/localhost(?::\d+)?$/.test(origin)) {
+    if (!origin || allowedCorsOrigins.has(origin) || origin === 'capacitor://localhost' || /^https?:\/\/localhost(?::\d+)?$/.test(origin)) {
       callback(null, true);
       return;
     }
@@ -93,7 +96,9 @@ function canAccessTenant(req, tenantId) {
 function parseDateFilter(value) {
   if (!value) return null;
   const parsed = String(value).trim();
-  return /^\d{4}-\d{2}-\d{2}$/.test(parsed) ? parsed : null;
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(parsed)) return null;
+  const date = new Date(`${parsed}T00:00:00.000Z`);
+  return Number.isNaN(date.getTime()) || date.toISOString().slice(0, 10) !== parsed ? null : parsed;
 }
 
 function emptyReportMetrics() {
@@ -261,6 +266,14 @@ function requireSuperadmin(req, res) {
   return true;
 }
 
+function requireManager(req, res) {
+  if (!['SUPERADMIN', 'ADMIN'].includes(req.user.role)) {
+    res.status(403).json({ error: 'Acesso restrito ao administrador.' });
+    return false;
+  }
+  return true;
+}
+
 app.post('/api/auth/login', loginLimiter, asyncRoute(async (req, res) => {
   const email = cleanText(req.body?.email, 180);
   const password = String(req.body?.password || '');
@@ -280,6 +293,20 @@ app.post('/api/auth/login', loginLimiter, asyncRoute(async (req, res) => {
 
 app.get('/api/me', auth, (req, res) => res.json(req.user));
 
+app.post('/api/auth/change-password', auth, asyncRoute(async (req, res) => {
+  const currentPassword = String(req.body?.currentPassword || '');
+  const newPassword = String(req.body?.newPassword || '');
+  if (!currentPassword || newPassword.length < 12) {
+    return res.status(400).json({ error: 'A nova senha precisa ter pelo menos 12 caracteres.' });
+  }
+  const result = await pool.query('SELECT password_hash FROM users WHERE id=$1 AND active=true', [req.user.id]);
+  if (!result.rowCount || !(await bcrypt.compare(currentPassword, result.rows[0].password_hash))) {
+    return res.status(401).json({ error: 'Senha atual inválida.' });
+  }
+  await pool.query('UPDATE users SET password_hash=$1 WHERE id=$2', [await bcrypt.hash(newPassword, 12), req.user.id]);
+  res.json({ ok: true });
+}));
+
 app.get('/api/tenants', auth, async (req, res) => {
   if (!requireSuperadmin(req, res)) return;
   const result = await pool.query('SELECT id,name,created_at FROM tenants ORDER BY name');
@@ -291,8 +318,8 @@ app.post('/api/tenants', auth, asyncRoute(async (req, res) => {
   const name = cleanText(req.body?.name, 160);
   const email = cleanText(req.body?.email, 180);
   const password = String(req.body?.password || '');
-  if (!name || !email || password.length < 8) {
-    return res.status(400).json({ error: 'Informe empresa, e-mail e senha com pelo menos 8 caracteres.' });
+  if (!name || !email || password.length < 12) {
+    return res.status(400).json({ error: 'Informe empresa, e-mail e senha com pelo menos 12 caracteres.' });
   }
 
   const client = await pool.connect();
@@ -343,6 +370,7 @@ app.get('/api/surveys/:id', auth, asyncRoute(async (req, res) => {
 }));
 
 app.post('/api/surveys', auth, async (req, res) => {
+  if (!requireManager(req, res)) return;
   const tenantId = tenantForUser(req, req.body?.tenantId);
   const title = cleanText(req.body?.title, 200);
   const description = cleanText(req.body?.description, 1000);
@@ -375,6 +403,7 @@ app.post('/api/surveys', auth, async (req, res) => {
 });
 
 app.patch('/api/surveys/:id', auth, asyncRoute(async (req, res) => {
+  if (!requireManager(req, res)) return;
   const surveyId = asPositiveInt(req.params.id);
   if (!surveyId) return res.status(400).json({ error: 'Pesquisa inválida.' });
   const existing = await pool.query('SELECT id,tenant_id FROM surveys WHERE id=$1', [surveyId]);
@@ -551,6 +580,7 @@ app.post('/api/devices/register', pairingLimiter, asyncRoute(async (req, res) =>
 }));
 
 app.post('/api/devices/pair', pairingLimiter, auth, asyncRoute(async (req, res) => {
+  if (!requireManager(req, res)) return;
   const activationCode = cleanText(req.body?.activationCode, 6);
   const tenantId = tenantForUser(req, req.body?.tenantId);
   const locationName = cleanText(req.body?.locationName || 'Recepção', 160);
@@ -640,6 +670,7 @@ async function loadManagedDevice(req, res, deviceId) {
 }
 
 app.patch('/api/devices/:id', auth, asyncRoute(async (req, res) => {
+  if (!requireManager(req, res)) return;
   const deviceId = asPositiveInt(req.params.id);
   if (!deviceId) return res.status(400).json({ error: 'Tablet inválido.' });
   const device = await loadManagedDevice(req, res, deviceId);
@@ -680,6 +711,7 @@ app.patch('/api/devices/:id', auth, asyncRoute(async (req, res) => {
 }));
 
 app.post('/api/devices/:id/refresh-config', auth, asyncRoute(async (req, res) => {
+  if (!requireManager(req, res)) return;
   const deviceId = asPositiveInt(req.params.id);
   const device = await loadManagedDevice(req, res, deviceId);
   if (!device) return;
@@ -691,6 +723,7 @@ app.post('/api/devices/:id/refresh-config', auth, asyncRoute(async (req, res) =>
 }));
 
 app.post('/api/devices/:id/remove-survey', auth, asyncRoute(async (req, res) => {
+  if (!requireManager(req, res)) return;
   const deviceId = asPositiveInt(req.params.id);
   const device = await loadManagedDevice(req, res, deviceId);
   if (!device) return;
@@ -699,6 +732,7 @@ app.post('/api/devices/:id/remove-survey', auth, asyncRoute(async (req, res) => 
 }));
 
 app.post('/api/devices/:id/unpair', auth, asyncRoute(async (req, res) => {
+  if (!requireManager(req, res)) return;
   const deviceId = asPositiveInt(req.params.id);
   const device = await loadManagedDevice(req, res, deviceId);
   if (!device) return;
@@ -713,6 +747,7 @@ app.post('/api/devices/:id/unpair', auth, asyncRoute(async (req, res) => {
 }));
 
 app.delete('/api/devices/:id', auth, asyncRoute(async (req, res) => {
+  if (!requireManager(req, res)) return;
   const deviceId = asPositiveInt(req.params.id);
   const device = await loadManagedDevice(req, res, deviceId);
   if (!device) return;
@@ -721,6 +756,7 @@ app.delete('/api/devices/:id', auth, asyncRoute(async (req, res) => {
 }));
 
 app.post('/api/devices/:id/assign-survey', auth, async (req, res) => {
+  if (!requireManager(req, res)) return;
   const deviceId = asPositiveInt(req.params.id);
   const surveyId = asPositiveInt(req.body?.surveyId);
   if (!deviceId || !surveyId) return res.status(400).json({ error: 'Tablet e pesquisa são obrigatórios.' });
@@ -807,6 +843,7 @@ app.post('/api/devices/responses', deviceAuth, async (req, res) => {
     return res.status(400).json({ error: 'invalid_response' });
   }
   if (!req.device.tenant_id) return res.status(409).json({ error: 'device_not_paired' });
+  if (cleanText(req.body?.deviceId, 80) !== req.device.device_id) return res.status(400).json({ error: 'invalid_device' });
   if (!req.device.active_survey_id || req.device.active_survey_id !== surveyId) {
     return res.status(409).json({ error: 'survey_not_assigned_to_device' });
   }

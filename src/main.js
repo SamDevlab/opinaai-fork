@@ -4,6 +4,21 @@ import { renderTablet } from './tablet.js';
 
 const app = document.querySelector('#app');
 const nativeKiosk = Boolean(globalThis.Capacitor?.Plugins?.OpinaRuntime);
+const AUTH_TOKEN_KEY = 'opina_token';
+
+function authToken() {
+  return sessionStorage.getItem(AUTH_TOKEN_KEY) || localStorage.getItem(AUTH_TOKEN_KEY);
+}
+
+function saveAuthToken(token) {
+  sessionStorage.setItem(AUTH_TOKEN_KEY, token);
+  localStorage.removeItem(AUTH_TOKEN_KEY);
+}
+
+function clearAuthToken() {
+  sessionStorage.removeItem(AUTH_TOKEN_KEY);
+  localStorage.removeItem(AUTH_TOKEN_KEY);
+}
 
 if (nativeKiosk) {
   renderTablet(app).catch((error) => {
@@ -41,7 +56,7 @@ function dashboardIcon(name) {
 }
 
 async function api(path, options = {}) {
-  const token = localStorage.getItem('opina_token');
+  const token = authToken();
   const response = await fetch(path, {
     ...options,
     headers: {
@@ -53,6 +68,38 @@ async function api(path, options = {}) {
   const data = response.status === 204 ? null : await response.json().catch(() => ({}));
   if (!response.ok) throw new Error(data?.error || 'Não foi possível concluir a operação.');
   return data;
+}
+
+function openDialog({ title, description = '', fields = [], submitLabel = 'Salvar', destructive = false }) {
+  const dialog = document.createElement('dialog');
+  dialog.className = 'app-dialog';
+  dialog.innerHTML = `<form method="dialog" class="app-dialog__form"><div class="app-dialog__header"><div><p class="section-kicker">OPINA AI</p><h2>${escapeHtml(title)}</h2>${description ? `<p>${escapeHtml(description)}</p>` : ''}</div><button type="button" class="app-dialog__close" aria-label="Fechar">×</button></div><div class="app-dialog__fields">${fields.map((field) => field.type === 'select'
+    ? `<label>${escapeHtml(field.label)}<select name="${escapeHtml(field.name)}" required>${field.options.map((option) => `<option value="${escapeHtml(option.value)}" ${String(option.value) === String(field.value) ? 'selected' : ''}>${escapeHtml(option.label)}</option>`).join('')}</select></label>`
+    : `<label>${escapeHtml(field.label)}<input name="${escapeHtml(field.name)}" type="${field.type || 'text'}" value="${escapeHtml(field.value || '')}" ${field.required === false ? '' : 'required'}></label>`).join('')}</div><div class="app-dialog__actions"><button type="button" class="outline-button app-dialog__cancel">Cancelar</button><button type="submit" class="submit-button compact ${destructive ? 'danger-button' : ''}">${escapeHtml(submitLabel)}</button></div></form>`;
+  document.body.appendChild(dialog);
+  return new Promise((resolve) => {
+    let settled = false;
+    const finish = (value) => {
+      if (settled) return;
+      settled = true;
+      dialog.close();
+      dialog.remove();
+      resolve(value);
+    };
+    dialog.querySelector('.app-dialog__close').onclick = () => finish(null);
+    dialog.querySelector('.app-dialog__cancel').onclick = () => finish(null);
+    dialog.addEventListener('cancel', (event) => { event.preventDefault(); finish(null); }, { once: true });
+    dialog.querySelector('form').onsubmit = (event) => {
+      event.preventDefault();
+      finish(Object.fromEntries(new FormData(event.currentTarget)));
+    };
+    dialog.showModal();
+  });
+}
+
+async function confirmAction(title, description) {
+  const result = await openDialog({ title, description, submitLabel: 'Confirmar', destructive: true, fields: [] });
+  return result !== null;
 }
 
 function renderAdmin(root) {
@@ -116,16 +163,16 @@ function renderAdmin(root) {
         method: 'POST',
         body: JSON.stringify({ email: root.querySelector('#email').value, password: passwordInput.value }),
       });
-      localStorage.setItem('opina_token', data.token);
+      saveAuthToken(data.token);
       await renderDashboard(root, data.user);
     } catch (error) {
       formMessage.textContent = error.message;
     }
   });
 
-  const token = localStorage.getItem('opina_token');
+  const token = authToken();
   if (token) {
-    api('/api/me').then((user) => renderDashboard(root, user)).catch(() => localStorage.removeItem('opina_token'));
+    api('/api/me').then((user) => renderDashboard(root, user)).catch(() => clearAuthToken());
   }
 }
 
@@ -155,7 +202,7 @@ async function renderDashboard(root, user) {
       <section class="dashboard-content">
         <header class="dashboard-topbar">
           <div class="mobile-brand"><span class="brand-symbol" aria-hidden="true">${dashboardIcon('spark')}</span><strong>Opina <em>AI</em></strong></div>
-          <div class="topbar-actions"><a class="primary-button" href="/tablet" target="_blank">Abrir tablet de teste <span aria-hidden="true">↗</span></a><button id="logout" class="topbar-logout" type="button">Sair</button></div>
+          <div class="topbar-actions"><span id="dashboard-status" class="sync-status" role="status" aria-live="polite"><i></i>Atualizado</span><a class="primary-button" href="/tablet" target="_blank">Abrir tablet de teste <span aria-hidden="true">↗</span></a><button id="change-password" class="topbar-account" type="button">Minha senha</button><button id="logout" class="topbar-logout" type="button">Sair</button></div>
         </header>
         <section id="overview" class="dashboard-page-header">
           <div><p class="section-kicker">PAINEL</p><h1 id="page-title">Visão geral</h1><p id="page-subtitle" class="page-subtitle">Acompanhe as avaliações e a operação dos tablets.</p></div>
@@ -172,7 +219,7 @@ async function renderDashboard(root, user) {
             <article class="dashboard-card action-card action-card--pair"><div class="action-card__icon" aria-hidden="true">${dashboardIcon('tablet')}</div><div class="action-card__intro"><h3>Parear tablet</h3><p>Conecte um dispositivo à operação.</p></div><form id="pair-form" class="form-stack"><label>Código exibido no tablet<input name="activationCode" inputmode="numeric" maxlength="6" pattern="[0-9]{6}" required placeholder="Ex.: 482913"></label><div class="form-grid"><label>Nome do tablet<input name="deviceName" placeholder="Tablet Recepção"></label><label>Unidade / local<input name="locationName" value="Recepção" required></label></div><div class="form-submit-row"><button class="submit-button compact" type="submit">Parear dispositivo <span aria-hidden="true">→</span></button><p class="inline-message" id="pair-message" role="status"></p></div></form></article>
           </div>
         </section>
-        ${user.role === 'SUPERADMIN' ? `<section id="companies" class="dashboard-section admin-tools" data-dashboard-view="operations"><details class="admin-details"><summary><span><small>ADMINISTRAÇÃO</small><strong>Gerenciar empresas</strong></span><b>Adicionar empresa <span aria-hidden="true">＋</span></b></summary><article class="dashboard-card"><form id="tenant-form" class="form-grid form-grid--tenant"><label>Nome da empresa<input name="name" required></label><label>E-mail do administrador<input name="email" type="email" required></label><label>Senha inicial<input name="password" type="password" minlength="8" required></label><div class="form-submit-row"><button class="submit-button compact" type="submit">Criar empresa <span aria-hidden="true">→</span></button><p class="inline-message" id="tenant-message" role="status"></p></div></form></article></details></section>` : ''}
+        ${user.role === 'SUPERADMIN' ? `<section id="companies" class="dashboard-section admin-tools" data-dashboard-view="operations"><details class="admin-details"><summary><span><small>ADMINISTRAÇÃO</small><strong>Gerenciar empresas</strong></span><b>Adicionar empresa <span aria-hidden="true">＋</span></b></summary><article class="dashboard-card"><form id="tenant-form" class="form-grid form-grid--tenant"><label>Nome da empresa<input name="name" required></label><label>E-mail do administrador<input name="email" type="email" required></label><label>Senha inicial<input name="password" type="password" minlength="12" required></label><div class="form-submit-row"><button class="submit-button compact" type="submit">Criar empresa <span aria-hidden="true">→</span></button><p class="inline-message" id="tenant-message" role="status"></p></div></form></article></details></section>` : ''}
         <section id="tablets" class="dashboard-section" data-dashboard-view="tablets"><div class="section-heading"><div><p class="section-kicker">OPERAÇÃO</p><h2>Tablets</h2></div><div class="section-heading__action"><span id="device-count" class="section-counter">Carregando...</span><a data-view="operations" href="#operations" class="text-link">+ Parear tablet</a></div></div><div class="dashboard-card dashboard-card--flush"><div id="device-list" class="device-list">Carregando...</div></div></section>
         <section id="surveys" class="dashboard-section" data-dashboard-view="surveys"><div class="section-heading"><div><p class="section-kicker">CONTEÚDO</p><h2>Pesquisas</h2></div></div><div class="dashboard-card"><div id="survey-list" class="survey-list">Carregando...</div></div></section>
         <section id="reports" class="dashboard-section report-section" data-dashboard-view="reports"><div class="section-heading"><div><p class="section-kicker">RESULTADOS</p><h2>Relatórios</h2></div><span id="report-total" class="section-counter">Carregando...</span></div><div class="dashboard-card report-card"><div class="report-toolbar"><div class="date-row"><label>De <input id="from" type="date"></label><label>Até <input id="to" type="date"></label></div><div class="report-filters"><label>Pesquisa<select id="report-survey"><option value="">Todas</option></select></label><label>Unidade<select id="report-location"><option value="">Todas</option></select></label><label>Tablet<select id="report-device"><option value="">Todos</option></select></label></div><button id="load-report" class="outline-button" type="button">Atualizar <span aria-hidden="true">↻</span></button></div><div class="report-results"><div class="report-results__header"><h3>Distribuição</h3><span>Respostas por avaliação</span></div><div id="report-distribution" class="distribution-list"></div><div id="report-list" class="report-list"></div></div></div></section>
@@ -201,7 +248,34 @@ async function renderDashboard(root, user) {
   window.onhashchange = () => showDashboardView(location.hash.slice(1), false);
   showDashboardView(location.hash.slice(1), false);
 
-  root.querySelector('#logout').onclick = () => { localStorage.removeItem('opina_token'); location.reload(); };
+  root.querySelector('#logout').onclick = () => { clearAuthToken(); location.reload(); };
+  root.querySelector('#change-password').onclick = async () => {
+    const values = await openDialog({
+      title: 'Trocar senha',
+      description: 'Use uma senha com pelo menos 12 caracteres.',
+      fields: [
+        { name: 'currentPassword', label: 'Senha atual', type: 'password' },
+        { name: 'newPassword', label: 'Nova senha', type: 'password' },
+        { name: 'confirmPassword', label: 'Confirmar nova senha', type: 'password' },
+      ],
+      submitLabel: 'Atualizar senha',
+    });
+    if (!values) return;
+    const status = root.querySelector('#dashboard-status');
+    if (values.newPassword !== values.confirmPassword) {
+      status.innerHTML = '<i></i>As senhas não conferem';
+      status.classList.add('sync-status--error');
+      return;
+    }
+    try {
+      await api('/api/auth/change-password', { method: 'POST', body: JSON.stringify(values) });
+      status.innerHTML = '<i></i>Senha atualizada';
+      status.classList.remove('sync-status--error');
+    } catch (error) {
+      status.innerHTML = `<i></i>${escapeHtml(error.message)}`;
+      status.classList.add('sync-status--error');
+    }
+  };
 
   if (user.role === 'SUPERADMIN') {
     root.querySelector('#tenant-filter').onchange = async (event) => {
@@ -212,13 +286,15 @@ async function renderDashboard(root, user) {
       event.preventDefault();
       const form = new FormData(event.target);
       const message = root.querySelector('#tenant-message');
+      const submitButton = event.target.querySelector('button[type="submit"]');
+      submitButton.disabled = true;
       try {
         const created = await api('/api/tenants', { method: 'POST', body: JSON.stringify(Object.fromEntries(form)) });
         message.textContent = 'Empresa criada.';
         tenants = await api('/api/tenants');
         selectedTenantId = created.tenant.id;
         await renderDashboard(root, user);
-      } catch (error) { message.textContent = error.message; }
+      } catch (error) { message.textContent = error.message; } finally { submitButton.disabled = false; }
     };
   }
 
@@ -238,17 +314,21 @@ async function renderDashboard(root, user) {
       questions: [{ text: form.get('question'), type: form.get('type'), options }],
     };
     const message = root.querySelector('#survey-message');
+    const submitButton = event.target.querySelector('button[type="submit"]');
+    submitButton.disabled = true;
     try {
       await api('/api/surveys', { method: 'POST', body: JSON.stringify(payload) });
       message.textContent = 'Pesquisa cadastrada. Agora associe-a a um tablet.';
       event.target.reset(); toggleOptions(); await loadDashboardData();
-    } catch (error) { message.textContent = error.message; }
+    } catch (error) { message.textContent = error.message; } finally { submitButton.disabled = false; }
   };
 
   root.querySelector('#pair-form').onsubmit = async (event) => {
     event.preventDefault();
     const form = new FormData(event.target);
     const message = root.querySelector('#pair-message');
+    const submitButton = event.target.querySelector('button[type="submit"]');
+    submitButton.disabled = true;
     try {
       await api('/api/devices/pair', {
         method: 'POST',
@@ -257,12 +337,30 @@ async function renderDashboard(root, user) {
       message.textContent = 'Tablet pareado com sucesso.';
       event.target.reset(); event.target.querySelector('[name=locationName]').value = 'Recepção';
       await loadDashboardData();
-    } catch (error) { message.textContent = error.message; }
+    } catch (error) { message.textContent = error.message; } finally { submitButton.disabled = false; }
   };
 
   root.querySelector('#load-report').onclick = loadDashboardData;
 
   async function loadDashboardData() {
+    const status = root.querySelector('#dashboard-status');
+    try {
+      await loadDashboardDataUnsafe();
+      if (status) {
+        status.innerHTML = '<i></i>Atualizado agora';
+        status.classList.remove('sync-status--error');
+      }
+    } catch (error) {
+      if (status) {
+        status.innerHTML = '<i></i>Falha ao atualizar';
+        status.classList.add('sync-status--error');
+      }
+      const visibleMessage = root.querySelector('.inline-message');
+      if (visibleMessage) visibleMessage.textContent = error.message;
+    }
+  }
+
+  async function loadDashboardDataUnsafe() {
     const suffix = selectedTenantId ? `?tenantId=${encodeURIComponent(selectedTenantId)}` : '';
     const reportParams = new URLSearchParams();
     if (selectedTenantId) reportParams.set('tenantId', selectedTenantId);
@@ -330,41 +428,72 @@ async function renderDashboard(root, user) {
     });
     root.querySelectorAll('.edit-device').forEach((button) => {
       button.onclick = async () => {
-        const name = prompt('Nome do tablet', button.dataset.name);
-        if (name === null) return;
-        const locationName = prompt('Unidade / local', button.dataset.location || 'Recepção');
-        if (locationName === null) return;
-        await api(`/api/devices/${button.dataset.device}`, { method: 'PATCH', body: JSON.stringify({ name, locationName }) });
-        await loadDashboardData();
+        const values = await openDialog({
+          title: 'Editar tablet',
+          description: 'Atualize a identificação e o local de operação.',
+          fields: [
+            { name: 'name', label: 'Nome do tablet', value: button.dataset.name },
+            { name: 'locationName', label: 'Unidade / local', value: button.dataset.location || 'Recepção' },
+          ],
+        });
+        if (!values) return;
+        button.disabled = true;
+        try {
+          await api(`/api/devices/${button.dataset.device}`, { method: 'PATCH', body: JSON.stringify(values) });
+          await loadDashboardData();
+        } finally { button.disabled = false; }
       };
     });
     root.querySelectorAll('.unpair-device').forEach((button) => {
-      button.onclick = async () => { if (!confirm('Desparear este tablet? A pesquisa ativa será removida.')) return; await api(`/api/devices/${button.dataset.device}/unpair`, { method: 'POST' }); await loadDashboardData(); };
+      button.onclick = async () => {
+        if (!await confirmAction('Desparear tablet?', 'A pesquisa ativa será removida do dispositivo.')) return;
+        button.disabled = true;
+        try { await api(`/api/devices/${button.dataset.device}/unpair`, { method: 'POST' }); await loadDashboardData(); }
+        finally { button.disabled = false; }
+      };
     });
     root.querySelectorAll('.deactivate-device').forEach((button) => {
-      button.onclick = async () => { if (!confirm('Desativar este tablet?')) return; await api(`/api/devices/${button.dataset.device}`, { method: 'DELETE' }); await loadDashboardData(); };
+      button.onclick = async () => {
+        if (!await confirmAction('Desativar tablet?', 'O dispositivo deixará de receber pesquisas até ser ativado novamente.')) return;
+        button.disabled = true;
+        try { await api(`/api/devices/${button.dataset.device}`, { method: 'DELETE' }); await loadDashboardData(); }
+        finally { button.disabled = false; }
+      };
     });
     root.querySelectorAll('.edit-survey').forEach((button) => {
       button.onclick = async () => {
         const survey = await api(`/api/surveys/${button.dataset.survey}`);
         const question = survey.questions?.[0];
-        const title = prompt('Título da pesquisa', survey.title);
-        if (title === null) return;
-        const questionText = prompt('Pergunta', question?.text || survey.description || '');
-        if (questionText === null) return;
-        const responseType = prompt('Tipo de resposta: emoji, stars, scale ou options', question?.type || 'emoji');
-        if (responseType === null) return;
-        const nextType = responseType.trim().toLowerCase();
-        if (!['emoji', 'stars', 'scale', 'options'].includes(nextType)) { alert('Tipo inválido. Use emoji, stars, scale ou options.'); return; }
-        const options = nextType === 'options' ? prompt('Opções separadas por vírgula', (question?.options || []).join(', ')) : null;
-        if (nextType === 'options' && options === null) return;
-        const nextQuestion = { text: questionText, type: nextType, options: nextType === 'options' ? options.split(',').map((item) => item.trim()).filter(Boolean) : [] };
-        await api(`/api/surveys/${survey.id}`, { method: 'PATCH', body: JSON.stringify({ title, description: questionText, questions: [nextQuestion] }) });
-        await loadDashboardData();
+        const values = await openDialog({
+          title: 'Editar pesquisa',
+          description: 'Altere o texto e o tipo de resposta exibidos no tablet.',
+          fields: [
+            { name: 'title', label: 'Título da pesquisa', value: survey.title },
+            { name: 'questionText', label: 'Pergunta para o cliente', value: question?.text || survey.description || '' },
+            { name: 'type', label: 'Tipo de resposta', value: question?.type || 'emoji', type: 'select', options: [
+              { value: 'emoji', label: 'Carinhas de satisfação' },
+              { value: 'stars', label: 'Estrelas (1 a 5)' },
+              { value: 'scale', label: 'Nota de 1 a 10' },
+              { value: 'options', label: 'Opções personalizadas' },
+            ] },
+            { name: 'options', label: 'Opções separadas por vírgula', value: (question?.options || []).join(', '), required: false },
+          ],
+        });
+        if (!values) return;
+        const nextQuestion = { text: values.questionText, type: values.type, options: values.type === 'options' ? values.options.split(',').map((item) => item.trim()).filter(Boolean) : [] };
+        button.disabled = true;
+        try {
+          await api(`/api/surveys/${survey.id}`, { method: 'PATCH', body: JSON.stringify({ title: values.title, description: values.questionText, questions: [nextQuestion] }) });
+          await loadDashboardData();
+        } finally { button.disabled = false; }
       };
     });
     root.querySelectorAll('.toggle-survey').forEach((button) => {
-      button.onclick = async () => { await api(`/api/surveys/${button.dataset.survey}`, { method: 'PATCH', body: JSON.stringify({ published: button.dataset.published !== 'true' }) }); await loadDashboardData(); };
+      button.onclick = async () => {
+        button.disabled = true;
+        try { await api(`/api/surveys/${button.dataset.survey}`, { method: 'PATCH', body: JSON.stringify({ published: button.dataset.published !== 'true' }) }); await loadDashboardData(); }
+        finally { button.disabled = false; }
+      };
     });
     for (const id of ['report-survey', 'report-location', 'report-device']) root.querySelector(`#${id}`).onchange = loadDashboardData;
   }
