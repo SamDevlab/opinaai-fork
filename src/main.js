@@ -123,6 +123,16 @@ function openDialog({ title, description = '', fields = [], submitLabel = 'Salva
       : `<label>${escapeHtml(field.label)}<input name="${escapeHtml(field.name)}" type="${field.type || 'text'}" value="${escapeHtml(field.value || '')}" ${field.required === false ? '' : 'required'}></label>`;
   dialog.innerHTML = `<form method="dialog" class="app-dialog__form"><div class="app-dialog__header"><div><p class="section-kicker">OPINA AI</p><h2>${escapeHtml(title)}</h2>${description ? `<p>${escapeHtml(description)}</p>` : ''}</div><button type="button" class="app-dialog__close" aria-label="Fechar">×</button></div><div class="app-dialog__fields">${fields.map(renderField).join('')}</div><div class="app-dialog__actions"><button type="button" class="outline-button app-dialog__cancel">Cancelar</button><button type="submit" class="submit-button compact ${destructive ? 'danger-button' : ''}">${escapeHtml(submitLabel)}</button></div></form>`;
   document.body.appendChild(dialog);
+  const dialogType = dialog.querySelector('select[name="type"]');
+  const dialogEmojiConfig = dialog.querySelector('.emoji-config-field');
+  const dialogOptionsField = dialog.querySelector('input[name="options"]')?.closest('label');
+  const syncDialogFields = () => {
+    if (!dialogType) return;
+    dialogEmojiConfig?.classList.toggle('is-hidden', dialogType.value !== 'emoji');
+    dialogOptionsField?.classList.toggle('is-hidden', dialogType.value !== 'options');
+  };
+  dialogType?.addEventListener('change', syncDialogFields);
+  syncDialogFields();
   return new Promise((resolve) => {
     let settled = false;
     const finish = (value) => {
