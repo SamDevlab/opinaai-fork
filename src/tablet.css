@@ -32,11 +32,11 @@ body { display:block; min-height:100vh; margin:0; background:#eef5ff; }
 .stars-grid label:has(input:checked) { border-color:#176ee8; background:#eef5ff; box-shadow:0 10px 26px rgba(23,110,232,.16); }
 .stars-grid label:has(input:checked) .star-number { color:#176ee8; }
 @keyframes star-fill { 0% { opacity:.35; transform:scale(.78) rotate(-8deg); } 70% { opacity:1; transform:scale(1.12) rotate(3deg); } 100% { transform:scale(1); } }
-.stars-confirmation { margin:28px auto 0; text-align:center; animation:confirmation-in .22s ease both; }
-.stars-confirmation p { margin:0 0 16px; color:#53647e; font-size:clamp(20px,2.2vw,30px); }
-.stars-confirmation strong { color:#176ee8; }
-.stars-confirm-button { min-width:170px; min-height:60px; padding:0 30px; border:0; border-radius:18px; color:#fff; background:#176ee8; box-shadow:0 12px 26px rgba(23,110,232,.22); font-size:clamp(19px,2vw,27px); font-weight:900; }
-.stars-confirm-button:active { transform:translateY(1px); }
+.rating-confirmation { margin:28px auto 0; text-align:center; animation:confirmation-in .22s ease both; }
+.rating-confirmation p { margin:0 0 16px; color:#53647e; font-size:clamp(20px,2.2vw,30px); }
+.rating-confirmation strong { color:#176ee8; }
+.rating-confirm-button { min-width:170px; min-height:60px; padding:0 30px; border:0; border-radius:18px; color:#fff; background:#176ee8; box-shadow:0 12px 26px rgba(23,110,232,.22); font-size:clamp(19px,2vw,27px); font-weight:900; }
+.rating-confirm-button:active { transform:translateY(1px); }
 @keyframes confirmation-in { from { opacity:0; transform:translateY(8px); } to { opacity:1; transform:translateY(0); } }
 .emoji-grid input:checked + .emoji-face, .scale-grid input:checked + span, .option-grid input:checked + span { transform:translateY(-3px); }
 .emoji-grid label:has(input:checked), .scale-grid input:checked + span, .option-grid input:checked + span { border-color:#176ee8; background:#eef5ff; box-shadow:0 10px 26px rgba(23,110,232,.16); }

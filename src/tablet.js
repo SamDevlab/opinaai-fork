@@ -216,31 +216,33 @@ export async function renderTablet(root) {
   function renderSurvey(survey) {
     activeSurvey = survey;
     const questions = Array.isArray(survey.questions) ? survey.questions : [];
-    const starConfirmation = questions.length === 1 && questions[0]?.type === 'stars';
-    const quickSubmit = questions.length === 1 && !starConfirmation;
-    root.innerHTML = `<main class="tablet-shell"><section class="survey-kiosk"><header><p class="tablet-kicker">SUA OPINIÃO IMPORTA</p>${browserTestMode ? '<p class="browser-test-badge">MODO DE TESTE · NENHUMA RESPOSTA É ENVIADA</p>' : ''}</header><form id="kiosk-form" data-quick-submit="${quickSubmit}">${questions.map(renderQuestion).join('')}${quickSubmit || starConfirmation ? '' : '<button class="kiosk-submit" type="submit">Enviar avaliação</button>'}</form><footer>Opina AI · Pesquisa de satisfação</footer></section></main>`;
+    const ratingConfirmation = questions.length === 1 && ['emoji', 'stars'].includes(questions[0]?.type);
+    const quickSubmit = questions.length === 1 && !ratingConfirmation;
+    root.innerHTML = `<main class="tablet-shell"><section class="survey-kiosk"><header><p class="tablet-kicker">SUA OPINIÃO IMPORTA</p>${browserTestMode ? '<p class="browser-test-badge">MODO DE TESTE · NENHUMA RESPOSTA É ENVIADA</p>' : ''}</header><form id="kiosk-form" data-quick-submit="${quickSubmit}">${questions.map(renderQuestion).join('')}${quickSubmit || ratingConfirmation ? '' : '<button class="kiosk-submit" type="submit">Enviar avaliação</button>'}</form><footer>Opina AI · Pesquisa de satisfação</footer></section></main>`;
     const form = root.querySelector('#kiosk-form');
     form.onsubmit = submitSurvey;
     if (quickSubmit) form.addEventListener('change', submitSurvey);
-    form.querySelectorAll('.stars-grid').forEach((grid) => {
+    form.querySelectorAll('.rating-grid').forEach((grid) => {
       const inputs = [...grid.querySelectorAll('input')];
-      const confirmation = form.querySelector(`[data-stars-confirm="${grid.dataset.starsQuestion}"]`);
+      const confirmation = form.querySelector(`[data-rating-confirm="${grid.dataset.ratingQuestion}"]`);
       inputs.forEach((input) => input.addEventListener('change', () => {
         const selectedValue = Number(input.value);
-        inputs.forEach((item) => item.closest('label')?.classList.toggle('is-filled', Number(item.value) <= selectedValue));
+        if (grid.classList.contains('stars-grid')) {
+          inputs.forEach((item) => item.closest('label')?.classList.toggle('is-filled', Number(item.value) <= selectedValue));
+        }
         if (confirmation) {
           confirmation.hidden = false;
-          confirmation.querySelector('[data-stars-value]').textContent = input.value;
+          confirmation.querySelector('[data-rating-value]').textContent = input.dataset.ratingLabel || input.value;
         }
       }));
-      confirmation?.querySelector('.stars-confirm-button')?.addEventListener('click', () => submitSurvey({ preventDefault() {}, currentTarget: form }));
+      confirmation?.querySelector('.rating-confirm-button')?.addEventListener('click', () => submitSurvey({ preventDefault() {}, currentTarget: form }));
     });
   }
 
   function renderQuestion(question) {
     const name = `q-${question.id}`;
     if (question.type === 'stars') {
-      return `<fieldset class="question"><legend>${escapeHtml(question.text)}</legend><div class="stars-grid" data-stars-question="${name}">${Array.from({ length: 5 }, (_, index) => index + 1).map((value) => `<label><input type="radio" name="${name}" value="${value}" required><span class="star-choice" aria-label="${value} estrela${value === 1 ? '' : 's'}">★</span><small class="star-number">${value}</small></label>`).join('')}</div><div class="stars-confirmation" data-stars-confirm="${name}" hidden><p>Você confirma sua nota? <strong data-stars-value>0</strong></p><button class="stars-confirm-button" type="button">Sim</button></div></fieldset>`;
+      return `<fieldset class="question"><legend>${escapeHtml(question.text)}</legend><div class="rating-grid stars-grid" data-rating-question="${name}">${Array.from({ length: 5 }, (_, index) => index + 1).map((value) => `<label><input type="radio" name="${name}" value="${value}" required><span class="star-choice" aria-label="${value} estrela${value === 1 ? '' : 's'}">★</span><small class="star-number">${value}</small></label>`).join('')}</div><div class="rating-confirmation" data-rating-confirm="${name}" hidden><p>Você confirma sua nota? <strong data-rating-value>0</strong></p><button class="rating-confirm-button" type="button">Sim</button></div></fieldset>`;
     }
     if (question.type === 'scale') {
       return `<fieldset class="question"><legend>${escapeHtml(question.text)}</legend><div class="scale-grid">${Array.from({ length: 10 }, (_, index) => index + 1).map((value) => `<label><input type="radio" name="${name}" value="${value}" required><span>${value}</span></label>`).join('')}</div></fieldset>`;
@@ -249,7 +251,7 @@ export async function renderTablet(root) {
       return `<fieldset class="question"><legend>${escapeHtml(question.text)}</legend><div class="option-grid">${(question.options || []).map((option) => `<label><input type="radio" name="${name}" value="${escapeHtml(option)}" required><span>${escapeHtml(option)}</span></label>`).join('')}</div></fieldset>`;
     }
     const faces = [['1', '😡', 'Péssimo'], ['2', '😕', 'Ruim'], ['3', '😐', 'Regular'], ['4', '🙂', 'Bom'], ['5', '😍', 'Ótimo']];
-    return `<fieldset class="question"><legend>${escapeHtml(question.text)}</legend><div class="emoji-grid">${faces.map(([value, emoji, label]) => `<label><input type="radio" name="${name}" value="${value}" required><span class="emoji-face">${emoji}</span><small>${label}</small></label>`).join('')}</div></fieldset>`;
+    return `<fieldset class="question"><legend>${escapeHtml(question.text)}</legend><div class="rating-grid emoji-grid" data-rating-question="${name}">${faces.map(([value, emoji, label]) => `<label><input type="radio" name="${name}" value="${value}" data-rating-label="${escapeHtml(label)}" required><span class="emoji-face">${emoji}</span><small>${label}</small></label>`).join('')}</div><div class="rating-confirmation" data-rating-confirm="${name}" hidden><p>Você confirma sua nota? <strong data-rating-value>0</strong></p><button class="rating-confirm-button" type="button">Sim</button></div></fieldset>`;
   }
 
   async function submitSurvey(event) {
