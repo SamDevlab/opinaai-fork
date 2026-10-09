@@ -124,7 +124,7 @@
 
 .metric-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; margin: 0; }
 .metric-card { min-height: 142px; padding: 20px; border: 1px solid var(--dash-line); border-radius: 17px; background: #fff; box-shadow: 0 9px 24px rgba(26, 61, 108, .045); }
-.metric-card__top { display: flex; align-items: center; justify-content: space-between; gap: 8px; color: var(--dash-muted); font-size: .74rem; font-weight: 800; }
+.metric-card__top { display: flex; align-items: center; justify-content: flex-start; gap: 10px; color: var(--dash-muted); font-size: .74rem; font-weight: 800; }
 .metric-card__icon { display: grid; width: 40px; height: 40px; flex: 0 0 40px; place-items: center; border: 1px solid rgba(36, 105, 219, .08); border-radius: 12px; color: #2469db; background: #eaf2ff; }
 .metric-card strong { display: block; margin-top: 18px; color: var(--dash-ink); font-size: 2rem; letter-spacing: -.06em; }
 .metric-card small { display: block; margin-top: 3px; color: #8a98ad; font-size: .72rem; }
