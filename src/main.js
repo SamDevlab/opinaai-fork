@@ -102,7 +102,12 @@ function renderLogin(root) {
             <label for="password">Senha</label>
             <div class="password-field">
               <input id="password" name="password" type="password" placeholder="Digite sua senha" autocomplete="current-password" required>
-              <button id="toggle-password" class="icon-button" type="button" aria-label="Mostrar senha" title="Mostrar senha">◉</button>
+              <button id="toggle-password" class="icon-button" type="button" aria-label="Mostrar senha" title="Mostrar senha" aria-pressed="false">
+                <svg class="password-visibility-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  <path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7-10-7-10-7Z"></path>
+                  <circle cx="12" cy="12" r="3"></circle>
+                </svg>
+              </button>
             </div>
             <button class="submit-button" type="submit">Entrar</button>
             <p id="form-message" class="form-message" role="status" aria-live="polite"></p>
@@ -119,8 +124,20 @@ function renderLogin(root) {
   togglePassword.addEventListener('click', () => {
     const isHidden = passwordInput.type === 'password';
     passwordInput.type = isHidden ? 'text' : 'password';
-    togglePassword.textContent = isHidden ? '◉' : '◌';
     togglePassword.setAttribute('aria-label', isHidden ? 'Ocultar senha' : 'Mostrar senha');
+    togglePassword.setAttribute('title', isHidden ? 'Ocultar senha' : 'Mostrar senha');
+    togglePassword.setAttribute('aria-pressed', String(isHidden));
+    togglePassword.innerHTML = isHidden
+      ? `<svg class="password-visibility-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <path d="M3 3l18 18"></path>
+          <path d="M10.6 10.6a2 2 0 0 0 2.8 2.8"></path>
+          <path d="M9.9 5.2A10.8 10.8 0 0 1 12 5c6.4 0 10 7 10 7a15.8 15.8 0 0 1-3.1 3.9"></path>
+          <path d="M6.2 6.2C3.5 8 2 12 2 12s3.6 7 10 7c1.1 0 2.1-.2 3-.5"></path>
+        </svg>`
+      : `<svg class="password-visibility-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7-10-7-10-7Z"></path>
+          <circle cx="12" cy="12" r="3"></circle>
+        </svg>`;
   });
 
   loginForm.addEventListener('submit', async (event) => {

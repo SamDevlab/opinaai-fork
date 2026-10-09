@@ -207,9 +207,13 @@ h2 {
   border-radius: 10px;
   color: #7c8da5;
   background: transparent;
-  font-size: 22px;
+  display: grid;
+  place-items: center;
+  cursor: pointer;
   transform: translateY(-50%);
 }
+
+.password-visibility-icon { display: block; width: 22px; height: 22px; }
 
 .icon-button:hover,
 .icon-button:focus-visible { color: #155fd0; background: #dceaff; }
