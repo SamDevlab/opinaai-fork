@@ -68,9 +68,6 @@
 
 .sidebar-brand, .mobile-brand { display: flex; align-items: center; gap: 16px; }
 .sidebar-brand { min-width: 0; padding: 0; }
-.sidebar-brand--art { display: block; }
-.sidebar-brand__image { display: block; width: 100%; max-width: 206px; height: auto; border-radius: 13px; }
-.sidebar-brand--art + .sidebar-label { margin-top: 18px; }
 .sidebar-brand > div { min-width: 0; }
 .brand-symbol { display: grid; width: 50px; height: 50px; flex: 0 0 50px; place-items: center; border-radius: 15px; color: #fff; background: #2c72f0; font-size: 20px; box-shadow: 0 8px 18px rgba(46, 113, 239, .3); }
 .sidebar-brand strong, .mobile-brand strong { color: #fff; font-size: 1.65rem; letter-spacing: -.04em; }
