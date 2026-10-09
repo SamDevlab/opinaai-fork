@@ -27,7 +27,7 @@ function escapeHtml(value) {
 
 function dashboardIcon(name) {
   const paths = {
-    spark: '<path d="m12 3 1.7 5.3L19 10l-5.3 1.7L12 17l-1.7-5.3L5 10l5.3-1.7L12 3Z"/><path d="m19 16 .8 2.2L22 19l-2.2.8L19 22l-.8-2.2L16 19l2.2-.8L19 16Z"/>',
+    spark: '<path d="m12 3.5 2.45 5.7 6.05 2.4-6.05 2.4L12 19.8 9.55 14 3.5 11.6l6.05-2.4L12 3.5Z" fill="currentColor" stroke="currentColor" stroke-linejoin="round"/><path d="m19.2 16.6.7 1.8 1.8.7-1.8.7-.7 1.8-.7-1.8-1.8-.7 1.8-.7.7-1.8Z" fill="currentColor" stroke="currentColor" stroke-linejoin="round"/>',
     home: '<path d="m3 10 9-7 9 7v10a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1V10Z"/>',
     settings: '<path d="M4 6h6m4 0h6M4 12h2m4 0h10M4 18h10m4 0h2"/><circle cx="12" cy="6" r="2"/><circle cx="8" cy="12" r="2"/><circle cx="16" cy="18" r="2"/>',
     tablet: '<rect x="6" y="2.5" width="12" height="19" rx="2"/><path d="M10 5h4M11 18.5h2"/>',
@@ -66,13 +66,7 @@ function renderAdmin(root) {
           <p class="eyebrow">PESQUISA DE SATISFAÇÃO DIGITAL</p>
           <h1>Pesquisas de<br><span>satisfação</span></h1>
           <p class="intro">Colete opiniões no tablet e acompanhe a experiência em tempo real.</p>
-          <div class="feedback-visual" aria-label="Cartão ilustrativo de opiniões">
-            <div class="feedback-visual__glow"></div>
-            <div class="feedback-card">
-              <div class="feedback-card__brand"><span class="sparkle-icon" aria-hidden="true">✦</span><strong>Opina <em>AI</em></strong></div>
-              <div class="faces" aria-hidden="true"><img class="faces-reference" src="/assets/faces-reference.png" alt=""></div>
-            </div>
-          </div>
+          <img class="feedback-visual" src="/assets/opinaai-satisfaction-illustration.png" alt="Cartão Opina AI com rostos que representam níveis de satisfação">
           <p class="tagline">Tablet, pesquisa e resultado. Sem distrações.</p>
         </div>
       </div>

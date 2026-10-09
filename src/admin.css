@@ -66,12 +66,12 @@
   background: #0c2044;
 }
 
-.sidebar-brand, .mobile-brand { display: flex; align-items: center; gap: 11px; }
+.sidebar-brand, .mobile-brand { display: flex; align-items: center; gap: 16px; }
 .sidebar-brand { padding: 0 12px; }
-.brand-symbol { display: grid; width: 34px; height: 34px; place-items: center; border-radius: 11px; color: #fff; background: #2c72f0; font-size: 20px; box-shadow: 0 8px 18px rgba(46, 113, 239, .3); }
-.sidebar-brand strong, .mobile-brand strong { color: #fff; font-size: 1.25rem; letter-spacing: -.04em; }
+.brand-symbol { display: grid; width: 50px; height: 50px; flex: 0 0 50px; place-items: center; border-radius: 15px; color: #fff; background: #2c72f0; font-size: 20px; box-shadow: 0 8px 18px rgba(46, 113, 239, .3); }
+.sidebar-brand strong, .mobile-brand strong { color: #fff; font-size: 1.65rem; letter-spacing: -.04em; }
 .sidebar-brand em, .mobile-brand em { color: #76ddff; font-style: normal; }
-.sidebar-brand small { display: block; margin-top: 3px; color: #8da7ce; font-size: .68rem; }
+.sidebar-brand small { display: block; margin-top: 3px; color: #8da7ce; font-size: 1rem; }
 .sidebar-label { margin: 54px 12px 12px; color: #6684b4; font-size: .65rem; font-weight: 900; letter-spacing: .16em; }
 .dashboard-nav { display: grid; gap: 5px; }
 .dashboard-nav__item { display: flex; align-items: center; gap: 12px; min-height: 46px; padding: 0 13px; border-radius: 12px; color: #9db4d6; text-decoration: none; font-size: .88rem; font-weight: 700; transition: background .16s ease, color .16s ease; }
@@ -218,6 +218,11 @@
 @media (max-width: 1120px) {
   .dashboard-shell { grid-template-columns: 205px minmax(0, 1fr); }
   .dashboard-content { padding-right: 28px; padding-left: 28px; }
+  .sidebar-brand { gap: 10px; padding: 0; }
+  .sidebar-brand .brand-symbol { width: 44px; height: 44px; flex-basis: 44px; border-radius: 13px; }
+  .sidebar-brand strong { font-size: 1.35rem; }
+  .sidebar-brand small { font-size: .8rem; }
+  .sidebar-brand .brand-symbol .dashboard-icon { width: 24px; height: 24px; }
   .hero-illustration { margin-right: 10px; }
   .device-row { align-items: stretch; flex-direction: column; gap: 16px; }
   .device-assign { min-width: 0; width: 100%; justify-content: flex-start; }
@@ -228,6 +233,10 @@
 @media (max-width: 820px) {
   .dashboard-shell { display: block; }
   .dashboard-sidebar { position: static; min-height: auto; padding: 18px 20px 13px; }
+  .sidebar-brand { gap: 16px; padding: 0 12px; }
+  .sidebar-brand .brand-symbol { width: 50px; height: 50px; flex-basis: 50px; border-radius: 15px; }
+  .sidebar-brand strong { font-size: 1.65rem; }
+  .sidebar-brand small { font-size: 1rem; }
   .sidebar-label, .sidebar-note { display: none; }
   .dashboard-nav { display: flex; gap: 4px; margin-top: 17px; overflow-x: auto; }
   .dashboard-nav__item { flex: 0 0 auto; min-height: 38px; padding: 0 10px; font-size: .75rem; }
@@ -236,7 +245,8 @@
   .dashboard-content { padding: 0 18px 50px; }
   .dashboard-topbar { min-height: 68px; }
   .mobile-brand { display: flex; }
-  .mobile-brand .brand-symbol { width: 29px; height: 29px; font-size: 17px; }
+  .mobile-brand { gap: 9px; }
+  .mobile-brand .brand-symbol { width: 29px; height: 29px; flex-basis: 29px; border-radius: 9px; font-size: 17px; }
   .mobile-brand strong { color: var(--dash-ink); font-size: 1.05rem; }
   .mobile-brand em { color: var(--dash-blue); }
   .sync-status { display: none; }
@@ -283,7 +293,8 @@
 #app { width: 100%; min-height: 100vh; }
 .is-view-hidden { display: none !important; }
 .dashboard-icon { display: block; width: 18px; height: 18px; }
-.brand-symbol .dashboard-icon { width: 19px; height: 19px; }
+.brand-symbol .dashboard-icon { width: 27px; height: 27px; }
+.mobile-brand .brand-symbol .dashboard-icon { width: 17px; height: 17px; }
 .sidebar-note__icon .dashboard-icon { width: 15px; height: 15px; }
 .dashboard-nav__item span { width: 22px; height: 22px; }
 .dashboard-page-header { display: flex; align-items: flex-end; justify-content: space-between; gap: 28px; margin: 34px 0 0; padding: 0 0 25px; border-bottom: 1px solid var(--dash-line); }

@@ -126,74 +126,11 @@ h1 span { color: #a5f1ff; }
 }
 
 .feedback-visual {
-  position: relative;
-  width: min(100%, 530px);
-  height: 260px;
-  margin: 22px 0 4px;
-}
-
-.feedback-visual__glow {
-  position: absolute;
-  left: 72px;
-  right: 36px;
-  top: 72px;
-  bottom: 16px;
-  border-radius: 34px;
-  background: rgba(0, 54, 155, 0.28);
-  transform: rotate(8deg);
-}
-
-.feedback-card {
-  position: absolute;
-  top: 36px;
-  left: 78px;
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
-  width: min(350px, calc(100% - 70px));
-  min-height: 180px;
-  padding: 26px 32px 22px;
-  border-radius: 26px;
-  color: #11213f;
-  background: linear-gradient(160deg, #fff 0%, #f5fbff 100%);
-  box-shadow: 0 18px 30px rgba(0, 41, 122, 0.25);
-  transform: rotate(-8deg);
-}
-
-.feedback-card__brand {
-  display: flex;
-  align-items: center;
-  gap: 16px;
-  font-size: clamp(2rem, 3vw, 3rem);
-  letter-spacing: -0.05em;
-}
-
-.feedback-card__brand em {
-  color: #1475ec;
-  font-style: normal;
-}
-
-.sparkle-icon {
-  display: grid;
-  width: 58px;
-  height: 58px;
-  place-items: center;
-  border-radius: 16px;
-  color: #fff;
-  background: #1954ed;
-  font-size: 34px;
-  line-height: 1;
-}
-
-.faces {
-  width: 228px;
-  margin: 22px 0 0 34px;
-}
-
-.faces-reference {
   display: block;
-  width: 100%;
+  width: min(100%, 530px);
   height: auto;
+  margin: 22px 0 4px;
+  border-radius: 14px;
 }
 
 .tagline {
@@ -331,12 +268,6 @@ h2 {
   .brand-panel { min-height: 450px; }
   .brand-panel__content { padding: 48px 38px 42px; }
   h1 { font-size: clamp(3rem, 11vw, 4.5rem); }
-  .feedback-visual { height: 230px; }
-  .feedback-card { left: 14%; width: min(380px, 78%); min-height: 170px; padding: 25px 28px 20px; }
-  .feedback-card__brand { font-size: 2rem; }
-  .sparkle-icon { width: 48px; height: 48px; font-size: 28px; }
-  .faces { margin-top: 16px; }
-  .faces { width: 190px; }
   .form-panel { padding: 54px 38px 62px; }
 }
 
@@ -347,11 +278,7 @@ h2 {
   .eyebrow { font-size: 11px; letter-spacing: 0.15em; }
   h1 { margin: 21px 0 18px; font-size: 3.15rem; }
   .intro { font-size: 0.98rem; }
-  .feedback-visual { height: 252px; margin-top: 24px; }
-  .feedback-card { top: 26px; left: 7%; width: 86%; min-height: 190px; padding: 22px 20px 18px; }
-  .feedback-card__brand { gap: 10px; font-size: 1.65rem; }
-  .sparkle-icon { width: 42px; height: 42px; border-radius: 12px; font-size: 24px; }
-  .faces { width: 166px; margin-left: 20px; }
+  .feedback-visual { margin-top: 24px; }
   .tagline { margin-top: 20px; font-size: 0.95rem; }
   .form-panel { padding: 42px 24px 48px; }
   h2 { margin-top: 20px; font-size: 2.45rem; }
