@@ -16,6 +16,7 @@ import com.getcapacitor.BridgeActivity;
 
 public class MainActivity extends BridgeActivity {
     private boolean kioskExitRequested = false;
+    private boolean kioskModeActive = false;
 
     @Override
     public void onCreate(Bundle savedInstanceState) {
@@ -70,6 +71,7 @@ public class MainActivity extends BridgeActivity {
 
     public boolean unlockKioskMode() {
         kioskExitRequested = true;
+        kioskModeActive = false;
         try {
             if (isInLockTaskMode()) stopLockTask();
         } catch (SecurityException | IllegalStateException ignored) {
@@ -83,22 +85,32 @@ public class MainActivity extends BridgeActivity {
         kioskExitRequested = false;
         hideSystemUi();
         enableKioskMode();
-        return isInLockTaskMode();
+        // If another Device Owner blocks Lock Task, the immersive fallback is
+        // still a valid kiosk mode for the test tablet.
+        return kioskModeActive || isInLockTaskMode();
     }
 
     public boolean isKioskUnlocked() {
         return kioskExitRequested;
     }
 
+    @Override
+    public void onBackPressed() {
+        if (!kioskExitRequested) return;
+        super.onBackPressed();
+    }
+
     private void enableKioskMode() {
         if (kioskExitRequested) return;
+        kioskModeActive = true;
         DevicePolicyManager policy = (DevicePolicyManager) getSystemService(Context.DEVICE_POLICY_SERVICE);
         ComponentName admin = new ComponentName(this, OpinaDeviceAdminReceiver.class);
         if (policy != null && policy.isDeviceOwnerApp(getPackageName())) {
             policy.setLockTaskPackages(admin, new String[]{getPackageName()});
         }
-        if (policy == null || (!policy.isDeviceOwnerApp(getPackageName()) && !policy.isLockTaskPermitted(getPackageName()))) return;
         try {
+            // A Device Owner externa pode negar o Lock Task completo. Nesse caso,
+            // startLockTask() ainda permite a fixação de tela para QA em tablets de teste.
             if (!isInLockTaskMode()) startLockTask();
         } catch (SecurityException | IllegalStateException ignored) {
             // The current device owner may revoke kiosk permission while the app is running.

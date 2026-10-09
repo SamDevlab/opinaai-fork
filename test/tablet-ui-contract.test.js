@@ -17,6 +17,8 @@ test('native tablet has the QR-like two-finger admin exit flow', async () => {
   assert.match(tabletSource, /event\.touches\.length < 2/);
   assert.match(tabletSource, /setTimeout\(\(\) => \{/);
   assert.match(tabletSource, /exitKiosk/);
+  assert.match(tabletSource, /reenterKiosk/);
   assert.match(runtimeSource, /configureAdminPin/);
   assert.match(runtimeSource, /admin_pin_invalid/);
+  assert.match(runtimeSource, /runOnUiThread/);
 });
