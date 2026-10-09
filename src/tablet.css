@@ -42,6 +42,19 @@ body { display:block; min-height:100vh; margin:0; background:#eef5ff; }
 .emoji-grid label:has(input:checked), .scale-grid input:checked + span, .option-grid input:checked + span { border-color:#176ee8; background:#eef5ff; box-shadow:0 10px 26px rgba(23,110,232,.16); }
 .kiosk-submit { align-self:center; min-width:min(520px,90%); min-height:76px; border:0; border-radius:22px; background:#176ee8; color:#fff; font-size:clamp(20px,2.1vw,30px); font-weight:900; box-shadow:0 14px 30px rgba(23,110,232,.23); }
 .survey-kiosk footer { margin-top:28px; color:#94a1b4; text-align:center; font-size:14px; }
+.kiosk-exit-dialog { position:fixed; inset:0; z-index:20; display:grid; place-items:center; padding:24px; background:rgba(6,25,57,.62); backdrop-filter:blur(8px); }
+.kiosk-exit-dialog__card { width:min(520px,100%); padding:clamp(28px,5vw,48px); border:1px solid #d7e2f0; border-radius:28px; background:#fff; box-shadow:0 28px 80px rgba(6,25,57,.3); }
+.kiosk-exit-dialog__card h2 { margin:0; color:#082858; font-size:clamp(28px,5vw,44px); line-height:1.05; letter-spacing:-.04em; }
+.kiosk-exit-dialog__card > p:not(.tablet-kicker) { margin:14px 0 26px; color:#667791; font-size:18px; line-height:1.45; }
+.kiosk-exit-dialog__card label { display:grid; gap:8px; color:#19345c; font-weight:800; }
+.kiosk-exit-dialog__card input { min-height:58px; padding:0 16px; border:1px solid #cbd9eb; border-radius:14px; color:#082858; font-size:24px; letter-spacing:.3em; text-align:center; }
+.kiosk-exit-dialog__error { margin:12px 0 0; color:#b42318; font-weight:700; }
+.kiosk-exit-dialog__actions { display:flex; justify-content:flex-end; gap:12px; margin-top:24px; }
+.kiosk-exit-dialog__actions button, .kiosk-reenter-button { min-height:52px; padding:0 20px; border:0; border-radius:14px; font:inherit; font-weight:800; cursor:pointer; }
+.kiosk-exit-dialog__cancel { background:#edf3fb; color:#19345c; }
+.kiosk-exit-dialog__submit, .kiosk-reenter-button { background:#176ee8; color:#fff; box-shadow:0 10px 24px rgba(23,110,232,.2); }
+.kiosk-unlocked-card { display:flex; flex-direction:column; align-items:center; justify-content:center; gap:18px; text-align:center; }
+.kiosk-unlocked-card .tablet-copy { max-width:620px; }
 .thanks-icon { display:grid; width:120px; height:120px; margin-bottom:38px; place-items:center; border-radius:50%; background:#e6f8ef; color:#12965d; font-size:70px; font-weight:900; }
 @media (max-width:700px) { .tablet-shell { padding:0; } .tablet-card,.survey-kiosk { width:100vw; min-height:100vh; border:0; border-radius:0; } .emoji-grid label { width:29vw; } .pairing-code { letter-spacing:.08em; } }
 @media (orientation: portrait) {

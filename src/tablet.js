@@ -171,6 +171,8 @@ function isTransientError(error) {
 export async function renderTablet(root) {
   let activeSurvey = null;
   let busy = false;
+  let kioskUnlocked = false;
+  let waitingForPairing = false;
   const browserTestMode = !isNativeRuntime();
 
   if (browserTestMode) {
@@ -189,6 +191,86 @@ export async function renderTablet(root) {
 
   root.innerHTML = '<main class="tablet-shell"><section class="tablet-card"><p class="tablet-kicker">OPINA AI</p><h1>Preparando este tablet...</h1><p class="tablet-copy">Conectando ao serviço.</p></section></main>';
   const id = await identity();
+  installAdminGesture();
+
+  function nativeRuntimePlugin() {
+    return globalThis.Capacitor?.Plugins?.OpinaRuntime || null;
+  }
+
+  async function configureAdminPin() {
+    const plugin = nativeRuntimePlugin();
+    if (!plugin?.configureAdminPin || !/^\d{4,8}$/.test(id.activation)) return;
+    try { await plugin.configureAdminPin({ pin: id.activation }); } catch { /* pairing can retry later */ }
+  }
+
+  function installAdminGesture() {
+    let timer = null;
+    const cancel = () => {
+      if (timer) clearTimeout(timer);
+      timer = null;
+    };
+    root.addEventListener('touchstart', (event) => {
+      if (event.touches.length < 2 || timer || kioskUnlocked) return;
+      timer = setTimeout(() => {
+        timer = null;
+        showAdminExitDialog();
+      }, 2000);
+    }, { passive: true });
+    root.addEventListener('touchend', (event) => { if (event.touches.length < 2) cancel(); }, { passive: true });
+    root.addEventListener('touchcancel', cancel, { passive: true });
+  }
+
+  async function showAdminExitDialog() {
+    if (root.querySelector('.kiosk-exit-dialog')) return;
+    const plugin = nativeRuntimePlugin();
+    let pinConfigured = true;
+    try { pinConfigured = (await plugin?.getInfo?.())?.adminPinConfigured !== false; } catch { /* use exit mode */ }
+    const dialog = document.createElement('div');
+    dialog.className = 'kiosk-exit-dialog';
+    dialog.innerHTML = `<div class="kiosk-exit-dialog__card" role="dialog" aria-modal="true" aria-labelledby="kiosk-exit-title"><p class="tablet-kicker">ACESSO ADMINISTRATIVO</p><h2 id="kiosk-exit-title">${pinConfigured ? 'Sair do modo quiosque' : 'Configurar acesso administrativo'}</h2><p>${pinConfigured ? 'Digite o PIN administrativo para liberar o tablet.' : 'Crie um PIN de 4 a 8 números. Ele ficará salvo somente neste tablet.'}</p><form>${pinConfigured ? '<label>PIN administrativo<input name="pin" type="password" inputmode="numeric" pattern="[0-9]{4,8}" minlength="4" maxlength="8" autocomplete="off" required></label>' : '<label>Novo PIN<input name="pin" type="password" inputmode="numeric" pattern="[0-9]{4,8}" minlength="4" maxlength="8" autocomplete="new-password" required></label><label>Confirmar PIN<input name="pinConfirm" type="password" inputmode="numeric" pattern="[0-9]{4,8}" minlength="4" maxlength="8" autocomplete="new-password" required></label>'}<p class="kiosk-exit-dialog__error" role="alert" hidden></p><div class="kiosk-exit-dialog__actions"><button class="kiosk-exit-dialog__cancel" type="button">Cancelar</button><button class="kiosk-exit-dialog__submit" type="submit">${pinConfigured ? 'Liberar tablet' : 'Definir e liberar'}</button></div></form></div>`;
+    root.append(dialog);
+    const form = dialog.querySelector('form');
+    const input = form.querySelector('input');
+    const error = dialog.querySelector('.kiosk-exit-dialog__error');
+    dialog.querySelector('.kiosk-exit-dialog__cancel').onclick = () => dialog.remove();
+    form.onsubmit = async (event) => {
+      event.preventDefault();
+      const plugin = nativeRuntimePlugin();
+      if (!plugin?.exitKiosk) return;
+      const submit = form.querySelector('.kiosk-exit-dialog__submit');
+      submit.disabled = true;
+      error.hidden = true;
+      try {
+        const pin = input.value.trim();
+        if (!/^\d{4,8}$/.test(pin)) throw new Error('admin_pin_invalid');
+        if (!pinConfigured) {
+          if (pin !== form.querySelector('[name=pinConfirm]').value.trim()) throw new Error('admin_pin_mismatch');
+          await plugin.configureAdminPin({ pin });
+        }
+        await plugin.exitKiosk({ pin });
+        kioskUnlocked = true;
+        dialog.remove();
+        renderAdminUnlocked();
+      } catch (unlockError) {
+        error.textContent = unlockError?.message === 'admin_pin_mismatch' ? 'Os PINs não conferem.' : unlockError?.message === 'admin_pin_not_configured' ? 'Pareie o tablet no painel antes de sair do modo quiosque.' : 'PIN inválido.';
+        error.hidden = false;
+        submit.disabled = false;
+        input.select();
+      }
+    };
+    input.focus();
+  }
+
+  function renderAdminUnlocked() {
+    root.innerHTML = '<main class="tablet-shell"><section class="tablet-card kiosk-unlocked-card"><p class="tablet-kicker">ACESSO ADMINISTRATIVO</p><h1>Tablet liberado</h1><p class="tablet-copy">O modo quiosque foi desativado temporariamente. Faça os ajustes necessários e bloqueie novamente antes de devolver o tablet ao atendimento.</p><button class="kiosk-reenter-button" type="button">Voltar ao modo quiosque</button></section></main>';
+    root.querySelector('.kiosk-reenter-button').onclick = async () => {
+      try { await nativeRuntimePlugin()?.reenterKiosk?.(); } finally {
+        kioskUnlocked = false;
+        if (activeSurvey) renderSurvey(activeSurvey);
+        else await refreshConfig();
+      }
+    };
+  }
 
   async function register() {
     ensureActivation(id);
@@ -328,14 +410,20 @@ export async function renderTablet(root) {
   }
 
   async function refreshConfig() {
+    if (kioskUnlocked) return;
     try {
       const config = await deviceRequest(`/api/devices/config?deviceId=${encodeURIComponent(id.deviceId)}&currentConfigVersion=${currentConfigVersion()}`, id);
       if (config.status === 'unpaired') {
         activeSurvey = null;
         ensureActivation(id);
+        waitingForPairing = true;
         await register();
         renderPairing();
         return;
+      }
+      if (waitingForPairing) {
+        await configureAdminPin();
+        waitingForPairing = false;
       }
       localStorage.removeItem(KEYS.activation);
       await flushPending();

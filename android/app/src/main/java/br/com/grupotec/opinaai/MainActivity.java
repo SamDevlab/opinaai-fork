@@ -15,6 +15,8 @@ import androidx.core.view.WindowInsetsControllerCompat;
 import com.getcapacitor.BridgeActivity;
 
 public class MainActivity extends BridgeActivity {
+    private boolean kioskExitRequested = false;
+
     @Override
     public void onCreate(Bundle savedInstanceState) {
         registerPlugin(OpinaSecureStoragePlugin.class);
@@ -35,14 +37,20 @@ public class MainActivity extends BridgeActivity {
     @Override
     public void onWindowFocusChanged(boolean hasFocus) {
         super.onWindowFocusChanged(hasFocus);
-        if (hasFocus) hideSystemUi();
+        if (hasFocus) {
+            if (kioskExitRequested) showSystemUi();
+            else hideSystemUi();
+        }
     }
 
     @Override
     public void onResume() {
         super.onResume();
-        hideSystemUi();
-        enableKioskMode();
+        if (kioskExitRequested) showSystemUi();
+        else {
+            hideSystemUi();
+            enableKioskMode();
+        }
     }
 
     private void hideSystemUi() {
@@ -53,7 +61,37 @@ public class MainActivity extends BridgeActivity {
         controller.setSystemBarsBehavior(WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE);
     }
 
+    private void showSystemUi() {
+        Window window = getWindow();
+        WindowCompat.setDecorFitsSystemWindows(window, true);
+        WindowInsetsControllerCompat controller = WindowCompat.getInsetsController(window, window.getDecorView());
+        controller.show(WindowInsetsCompat.Type.systemBars());
+    }
+
+    public boolean unlockKioskMode() {
+        kioskExitRequested = true;
+        try {
+            if (isInLockTaskMode()) stopLockTask();
+        } catch (SecurityException | IllegalStateException ignored) {
+            // The current device owner may keep control of Lock Task mode.
+        }
+        showSystemUi();
+        return !isInLockTaskMode();
+    }
+
+    public boolean lockKioskMode() {
+        kioskExitRequested = false;
+        hideSystemUi();
+        enableKioskMode();
+        return isInLockTaskMode();
+    }
+
+    public boolean isKioskUnlocked() {
+        return kioskExitRequested;
+    }
+
     private void enableKioskMode() {
+        if (kioskExitRequested) return;
         DevicePolicyManager policy = (DevicePolicyManager) getSystemService(Context.DEVICE_POLICY_SERVICE);
         ComponentName admin = new ComponentName(this, OpinaDeviceAdminReceiver.class);
         if (policy != null && policy.isDeviceOwnerApp(getPackageName())) {
