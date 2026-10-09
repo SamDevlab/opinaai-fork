@@ -6,6 +6,47 @@ const app = document.querySelector('#app');
 const nativeKiosk = Boolean(globalThis.Capacitor?.Plugins?.OpinaRuntime);
 const AUTH_TOKEN_KEY = 'opina_token';
 const DEFAULT_RATING_QUESTION = 'Como foi a sua experiência?';
+const DEFAULT_EMOJI_OPTIONS = [
+  { value: '1', emoji: '😡', label: 'Péssimo', animation: 'shake' },
+  { value: '2', emoji: '😕', label: 'Ruim', animation: 'float' },
+  { value: '3', emoji: '😐', label: 'Regular', animation: 'pulse' },
+  { value: '4', emoji: '🙂', label: 'Bom', animation: 'bounce' },
+  { value: '5', emoji: '😍', label: 'Ótimo', animation: 'heart' },
+];
+const EMOJI_ANIMATION_OPTIONS = [
+  { value: 'shake', label: 'Tremer' },
+  { value: 'float', label: 'Flutuar' },
+  { value: 'pulse', label: 'Pulsar' },
+  { value: 'bounce', label: 'Quicar' },
+  { value: 'heart', label: 'Brilhar' },
+];
+
+function normalizeEmojiOptions(options) {
+  return DEFAULT_EMOJI_OPTIONS.map((fallback, index) => {
+    const item = Array.isArray(options) ? options[index] : null;
+    return {
+      value: String(index + 1),
+      emoji: String(item?.emoji || (typeof item === 'string' ? item : fallback.emoji)).trim() || fallback.emoji,
+      label: String(item?.label || fallback.label).trim() || fallback.label,
+      animation: EMOJI_ANIMATION_OPTIONS.some((option) => option.value === item?.animation) ? item.animation : fallback.animation,
+    };
+  });
+}
+
+function readEmojiOptions(source, prefix = 'rating') {
+  const get = (name) => typeof source?.get === 'function' ? source.get(name) : source?.[name];
+  return DEFAULT_EMOJI_OPTIONS.map((fallback, index) => ({
+    value: String(index + 1),
+    emoji: String(get(`${prefix}-emoji-${index}`) || fallback.emoji).trim() || fallback.emoji,
+    label: String(get(`${prefix}-label-${index}`) || fallback.label).trim() || fallback.label,
+    animation: EMOJI_ANIMATION_OPTIONS.some((option) => option.value === get(`${prefix}-animation-${index}`)) ? get(`${prefix}-animation-${index}`) : fallback.animation,
+  }));
+}
+
+function renderEmojiCustomizationFields(options = DEFAULT_EMOJI_OPTIONS, prefix = 'rating', legend = 'Personalizar carinhas animadas') {
+  const normalized = normalizeEmojiOptions(options);
+  return `<fieldset class="emoji-customizer emoji-config-field"><legend>${escapeHtml(legend)}</legend><p class="emoji-customizer__hint">Escolha o emoji, o nome e o movimento de cada nota.</p><div class="emoji-customizer__grid">${normalized.map((item, index) => `<div class="emoji-customizer__row"><span class="emoji-customizer__score">${index + 1}</span><input name="${prefix}-emoji-${index}" value="${escapeHtml(item.emoji)}" maxlength="8" aria-label="Emoji da nota ${index + 1}"><input name="${prefix}-label-${index}" value="${escapeHtml(item.label)}" maxlength="40" aria-label="Rótulo da nota ${index + 1}"><select name="${prefix}-animation-${index}" aria-label="Animação da nota ${index + 1}">${EMOJI_ANIMATION_OPTIONS.map((animation) => `<option value="${animation.value}" ${animation.value === item.animation ? 'selected' : ''}>${animation.label}</option>`).join('')}</select></div>`).join('')}</div></fieldset>`;
+}
 
 function authToken() {
   return sessionStorage.getItem(AUTH_TOKEN_KEY) || localStorage.getItem(AUTH_TOKEN_KEY);
@@ -75,9 +116,12 @@ async function api(path, options = {}) {
 function openDialog({ title, description = '', fields = [], submitLabel = 'Salvar', destructive = false }) {
   const dialog = document.createElement('dialog');
   dialog.className = 'app-dialog';
-  dialog.innerHTML = `<form method="dialog" class="app-dialog__form"><div class="app-dialog__header"><div><p class="section-kicker">OPINA AI</p><h2>${escapeHtml(title)}</h2>${description ? `<p>${escapeHtml(description)}</p>` : ''}</div><button type="button" class="app-dialog__close" aria-label="Fechar">×</button></div><div class="app-dialog__fields">${fields.map((field) => field.type === 'select'
-    ? `<label>${escapeHtml(field.label)}<select name="${escapeHtml(field.name)}" required>${field.options.map((option) => `<option value="${escapeHtml(option.value)}" ${String(option.value) === String(field.value) ? 'selected' : ''}>${escapeHtml(option.label)}</option>`).join('')}</select></label>`
-    : `<label>${escapeHtml(field.label)}<input name="${escapeHtml(field.name)}" type="${field.type || 'text'}" value="${escapeHtml(field.value || '')}" ${field.required === false ? '' : 'required'}></label>`).join('')}</div><div class="app-dialog__actions"><button type="button" class="outline-button app-dialog__cancel">Cancelar</button><button type="submit" class="submit-button compact ${destructive ? 'danger-button' : ''}">${escapeHtml(submitLabel)}</button></div></form>`;
+  const renderField = (field) => field.type === 'emoji-config'
+    ? renderEmojiCustomizationFields(field.value, field.name, field.label || 'Personalizar carinhas animadas')
+    : field.type === 'select'
+      ? `<label>${escapeHtml(field.label)}<select name="${escapeHtml(field.name)}" required>${field.options.map((option) => `<option value="${escapeHtml(option.value)}" ${String(option.value) === String(field.value) ? 'selected' : ''}>${escapeHtml(option.label)}</option>`).join('')}</select></label>`
+      : `<label>${escapeHtml(field.label)}<input name="${escapeHtml(field.name)}" type="${field.type || 'text'}" value="${escapeHtml(field.value || '')}" ${field.required === false ? '' : 'required'}></label>`;
+  dialog.innerHTML = `<form method="dialog" class="app-dialog__form"><div class="app-dialog__header"><div><p class="section-kicker">OPINA AI</p><h2>${escapeHtml(title)}</h2>${description ? `<p>${escapeHtml(description)}</p>` : ''}</div><button type="button" class="app-dialog__close" aria-label="Fechar">×</button></div><div class="app-dialog__fields">${fields.map(renderField).join('')}</div><div class="app-dialog__actions"><button type="button" class="outline-button app-dialog__cancel">Cancelar</button><button type="submit" class="submit-button compact ${destructive ? 'danger-button' : ''}">${escapeHtml(submitLabel)}</button></div></form>`;
   document.body.appendChild(dialog);
   return new Promise((resolve) => {
     let settled = false;
@@ -253,7 +297,7 @@ async function renderDashboard(root, user) {
         </section>
         <section id="surveys" class="dashboard-section" data-dashboard-view="surveys">
           <div class="section-heading"><div><p class="section-kicker">CONTEÚDO</p><h2>Pesquisas</h2></div></div>
-          <article class="dashboard-card action-card action-card--survey"><div class="action-card__icon" aria-hidden="true">${dashboardIcon('survey')}</div><div class="action-card__intro"><h3>Nova pesquisa</h3><p>Crie a pergunta exibida no tablet.</p></div><form id="survey-form" class="form-stack"><div class="form-grid"><label>Título da pesquisa<input name="title" required placeholder="Ex.: Experiência de atendimento"></label><label>Pergunta para o cliente<input name="question" required value="${DEFAULT_RATING_QUESTION}" placeholder="Digite a pergunta exibida no tablet"></label></div><label>Tipo de resposta<select name="type"><option value="emoji">Carinhas de satisfação</option><option value="stars">Estrelas (1 a 5)</option><option value="scale">Nota de 1 a 10</option><option value="options">Opções personalizadas</option></select></label><label class="options-field is-hidden">Opções separadas por vírgula<input class="options-field is-hidden" name="options" placeholder="Ótimo, Bom, Regular, Ruim"></label><div class="form-submit-row"><button class="submit-button compact" type="submit">Cadastrar pesquisa <span aria-hidden="true">→</span></button><p class="inline-message" id="survey-message" role="status"></p></div></form></article>
+          <article class="dashboard-card action-card action-card--survey"><div class="action-card__icon" aria-hidden="true">${dashboardIcon('survey')}</div><div class="action-card__intro"><h3>Nova pesquisa</h3><p>Crie a pergunta exibida no tablet.</p></div><form id="survey-form" class="form-stack"><div class="form-grid"><label>Título da pesquisa<input name="title" required placeholder="Ex.: Experiência de atendimento"></label><label>Pergunta para o cliente<input name="question" required value="${DEFAULT_RATING_QUESTION}" placeholder="Digite a pergunta exibida no tablet"></label></div><label>Tipo de resposta<select name="type"><option value="emoji">Carinhas animadas</option><option value="stars">Estrelas (1 a 5)</option><option value="scale">Nota de 1 a 10</option><option value="options">Opções personalizadas</option></select></label>${renderEmojiCustomizationFields()}<label class="options-field is-hidden">Opções separadas por vírgula<input class="options-field is-hidden" name="options" placeholder="Ótimo, Bom, Regular, Ruim"></label><div class="form-submit-row"><button class="submit-button compact" type="submit">Cadastrar pesquisa <span aria-hidden="true">→</span></button><p class="inline-message" id="survey-message" role="status"></p></div></form></article>
           <div class="dashboard-card"><div id="survey-list" class="survey-list">Carregando...</div></div>
         </section>
         <section id="reports" class="dashboard-section report-section" data-dashboard-view="reports"><div class="section-heading"><div><p class="section-kicker">RESULTADOS</p><h2>Relatórios</h2></div><div class="section-heading__action"><span id="report-total" class="section-counter">Carregando...</span><button id="print-report" class="outline-button report-print-button" type="button"><span aria-hidden="true">${dashboardIcon('printer')}</span>Imprimir relatório</button></div></div><p id="report-print-context" class="report-print-context"></p><div class="dashboard-card report-card"><div class="report-toolbar"><div class="date-row"><label>De <input id="from" type="date"></label><label>Até <input id="to" type="date"></label></div><div class="report-filters"><label>Pesquisa<select id="report-survey"><option value="">Todas</option></select></label><label>Unidade<select id="report-location"><option value="">Todas</option></select></label><label>Tablet<select id="report-device"><option value="">Todos</option></select></label></div><button id="load-report" class="outline-button" type="button">Atualizar <span aria-hidden="true">↻</span></button></div><div class="report-results"><div class="report-results__header"><h3>Distribuição</h3><span>Respostas por avaliação</span></div><div id="report-distribution" class="distribution-list"></div><div id="report-list" class="report-list"></div></div></div></section>
@@ -332,19 +376,25 @@ async function renderDashboard(root, user) {
   }
 
   const typeSelect = root.querySelector('#survey-form [name=type]');
-  const toggleOptions = () => root.querySelectorAll('.options-field').forEach((node) => node.classList.toggle('is-hidden', typeSelect.value !== 'options'));
-  typeSelect.onchange = toggleOptions;
-  toggleOptions();
+  const toggleSurveyFields = () => {
+    root.querySelectorAll('.options-field').forEach((node) => node.classList.toggle('is-hidden', typeSelect.value !== 'options'));
+    root.querySelectorAll('.emoji-config-field').forEach((node) => node.classList.toggle('is-hidden', typeSelect.value !== 'emoji'));
+  };
+  typeSelect.onchange = toggleSurveyFields;
+  toggleSurveyFields();
 
   root.querySelector('#survey-form').onsubmit = async (event) => {
     event.preventDefault();
     const form = new FormData(event.target);
-    const options = String(form.get('options') || '').split(',').map((item) => item.trim()).filter(Boolean);
+    const type = String(form.get('type') || 'emoji');
+    const options = type === 'emoji'
+      ? readEmojiOptions(form, 'rating')
+      : String(form.get('options') || '').split(',').map((item) => item.trim()).filter(Boolean);
     const payload = {
       tenantId: selectedTenantId || undefined,
       title: form.get('title'),
       description: form.get('question'),
-      questions: [{ text: form.get('question'), type: form.get('type'), options }],
+      questions: [{ text: form.get('question'), type, options }],
     };
     const message = root.querySelector('#survey-message');
     const submitButton = event.target.querySelector('button[type="submit"]');
@@ -352,7 +402,7 @@ async function renderDashboard(root, user) {
     try {
       await api('/api/surveys', { method: 'POST', body: JSON.stringify(payload) });
       message.textContent = 'Pesquisa cadastrada. Agora associe-a a um tablet.';
-      event.target.reset(); toggleOptions(); await loadDashboardData();
+      event.target.reset(); toggleSurveyFields(); await loadDashboardData();
     } catch (error) { message.textContent = error.message; } finally { submitButton.disabled = false; }
   };
 
@@ -530,16 +580,17 @@ async function renderDashboard(root, user) {
             { name: 'title', label: 'Título da pesquisa', value: survey.title },
             { name: 'questionText', label: 'Pergunta para o cliente', value: question?.text || survey.description || '' },
             { name: 'type', label: 'Tipo de resposta', value: question?.type || 'emoji', type: 'select', options: [
-              { value: 'emoji', label: 'Carinhas de satisfação' },
+              { value: 'emoji', label: 'Carinhas animadas' },
               { value: 'stars', label: 'Estrelas (1 a 5)' },
               { value: 'scale', label: 'Nota de 1 a 10' },
               { value: 'options', label: 'Opções personalizadas' },
             ] },
+            { name: 'emoji-config', label: 'Personalizar carinhas animadas', value: normalizeEmojiOptions(question?.options), type: 'emoji-config' },
             { name: 'options', label: 'Opções separadas por vírgula', value: (question?.options || []).join(', '), required: false },
           ],
         });
         if (!values) return;
-        const nextQuestion = { text: values.questionText, type: values.type, options: values.type === 'options' ? values.options.split(',').map((item) => item.trim()).filter(Boolean) : [] };
+        const nextQuestion = { text: values.questionText, type: values.type, options: values.type === 'emoji' ? readEmojiOptions(values, 'emoji-config') : values.type === 'options' ? values.options.split(',').map((item) => item.trim()).filter(Boolean) : [] };
         button.disabled = true;
         try {
           await api(`/api/surveys/${survey.id}`, { method: 'PATCH', body: JSON.stringify({ title: values.title, description: values.questionText, questions: [nextQuestion] }) });

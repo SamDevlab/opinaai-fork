@@ -23,6 +23,14 @@ const pool = new Pool({
 const jwtSecret = process.env.JWT_SECRET || (process.env.NODE_ENV === 'production' ? null : 'dev-only-change-me');
 if (!jwtSecret) throw new Error('JWT_SECRET é obrigatória em produção.');
 const DEFAULT_RATING_QUESTION = 'Como foi a sua experiência?';
+const DEFAULT_EMOJI_OPTIONS = [
+  { value: '1', emoji: '😡', label: 'Péssimo', animation: 'shake' },
+  { value: '2', emoji: '😕', label: 'Ruim', animation: 'float' },
+  { value: '3', emoji: '😐', label: 'Regular', animation: 'pulse' },
+  { value: '4', emoji: '🙂', label: 'Bom', animation: 'bounce' },
+  { value: '5', emoji: '😍', label: 'Ótimo', animation: 'heart' },
+];
+const ALLOWED_EMOJI_ANIMATIONS = new Set(['shake', 'float', 'pulse', 'bounce', 'heart']);
 const allowedCorsOrigins = new Set(
   String(process.env.CORS_ORIGINS || '').split(',').map((origin) => origin.trim()).filter(Boolean),
 );
@@ -126,6 +134,22 @@ function emptyDistribution() {
   ].map(([value, emoji, label]) => ({ value, emoji, label, count: 0 }));
 }
 
+function normalizeEmojiOptions(input) {
+  const source = Array.isArray(input) ? input : [];
+  return DEFAULT_EMOJI_OPTIONS.map((fallback, index) => {
+    const item = source[index];
+    if (typeof item === 'string') {
+      return { ...fallback, emoji: cleanText(item, 16) || fallback.emoji };
+    }
+    return {
+      value: String(index + 1),
+      emoji: cleanText(item?.emoji, 16) || fallback.emoji,
+      label: cleanText(item?.label, 80) || fallback.label,
+      animation: ALLOWED_EMOJI_ANIMATIONS.has(item?.animation) ? item.animation : fallback.animation,
+    };
+  });
+}
+
 function normalizeQuestions(input) {
   const questions = Array.isArray(input) ? input.slice(0, 20) : [];
   const allowedTypes = new Set(['emoji', 'stars', 'scale', 'options']);
@@ -136,9 +160,11 @@ function normalizeQuestions(input) {
       text: cleanText(question?.text, 500) || (['emoji', 'stars'].includes(type) ? DEFAULT_RATING_QUESTION : ''),
       type,
       position: index,
-      options: Array.isArray(question?.options)
-        ? question.options.map((item) => cleanText(item, 120)).filter(Boolean).slice(0, 12)
-        : [],
+      options: type === 'emoji'
+        ? normalizeEmojiOptions(question?.options)
+        : Array.isArray(question?.options)
+          ? question.options.map((item) => cleanText(item, 120)).filter(Boolean).slice(0, 12)
+          : [],
     };
   });
   if (!normalized.length || normalized.some((question) => !question.text || (question.type === 'options' && question.options.length < 2))) {
@@ -529,13 +555,16 @@ app.get('/api/reports', auth, asyncRoute(async (req, res) => {
     dissatisfiedCount: Number(row.dissatisfied_count || 0),
     dissatisfiedRate: total ? Number(((Number(row.dissatisfied_count || 0) / total) * 100).toFixed(1)) : 0,
   };
-  const distribution = [
-    ['1', '😡', 'Péssimo', row.very_dissatisfied_count],
-    ['2', '😕', 'Ruim', row.dissatisfied_low_count],
-    ['3', '😐', 'Regular', row.neutral_distribution_count],
-    ['4', '🙂', 'Bom', row.satisfied_low_count],
-    ['5', '😍', 'Ótimo', row.satisfied_high_count],
-  ].map(([value, emoji, label, count]) => ({ value, emoji, label, count: Number(count || 0) }));
+  let distributionOptions = DEFAULT_EMOJI_OPTIONS;
+  if (surveyId) {
+    const configured = await pool.query(
+      'SELECT options FROM questions WHERE survey_id=$1 AND type=$2 ORDER BY position,id LIMIT 1',
+      [surveyId, 'emoji'],
+    );
+    if (configured.rowCount) distributionOptions = normalizeEmojiOptions(configured.rows[0].options);
+  }
+  const counts = [row.very_dissatisfied_count, row.dissatisfied_low_count, row.neutral_distribution_count, row.satisfied_low_count, row.satisfied_high_count];
+  const distribution = distributionOptions.map((option, index) => ({ ...option, count: Number(counts[index] || 0) }));
   res.json({ filters: { tenantId, from, to, surveyId, locationId, deviceId }, metrics, distribution, rows: rows.rows });
 }));
 

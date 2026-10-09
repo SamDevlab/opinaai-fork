@@ -32,6 +32,20 @@ test('emoji selection uses rounded styling and a lightweight animation', () => {
   assert.match(tabletCssSource, /\.emoji-grid label \{[^}]*border-radius:24px/);
 });
 
+test('emoji surveys support local animated presets and administrator customization', () => {
+  assert.match(tabletSource, /emojiOptions\(question\.options\)/);
+  assert.match(tabletSource, /emoji-motion--\$\{animation\}/);
+  assert.match(tabletSource, /emoji-spark/);
+  assert.match(dashboardSource, /renderEmojiCustomizationFields/);
+  assert.match(dashboardSource, /readEmojiOptions\(form, 'rating'\)/);
+  assert.match(dashboardSource, /name: 'emoji-config'/);
+  assert.match(serverSource, /normalizeEmojiOptions/);
+  assert.match(serverSource, /ALLOWED_EMOJI_ANIMATIONS/);
+  for (const animation of ['shake', 'float', 'pulse', 'bounce', 'heart']) {
+    assert.match(tabletCssSource, new RegExp(`emoji-reaction-${animation}`));
+  }
+});
+
 test('native tablet has the QR-like two-finger admin exit flow', async () => {
   const runtimeSource = await readFile(new URL('../android/app/src/main/java/br/com/grupotec/opinaai/OpinaRuntimePlugin.java', import.meta.url), 'utf8');
   assert.match(tabletSource, /event\.touches\.length < 2/);

@@ -411,6 +411,23 @@
 .app-dialog__actions .submit-button.compact { margin-top: 0; }
 .app-dialog__actions .danger-button { color: #fff; border-color: #b43e4b; background: #b43e4b; }
 
+.emoji-customizer { min-width: 0; padding: 16px; border: 1px solid var(--dash-line); border-radius: 16px; background: #f8fbff; }
+.emoji-customizer legend { padding: 0 5px; color: var(--dash-ink); font-size: .82rem; font-weight: 900; }
+.emoji-customizer__hint { margin: 0 0 12px; color: var(--dash-muted); font-size: .74rem; line-height: 1.45; }
+.emoji-customizer__grid { display: grid; gap: 8px; }
+.emoji-customizer__row { display: grid; grid-template-columns: 28px minmax(64px, .55fr) minmax(100px, 1fr) minmax(108px, .8fr); align-items: center; gap: 7px; }
+.emoji-customizer__row input, .emoji-customizer__row select { min-width: 0; height: 42px; padding: 0 9px; border: 1px solid #d5e0ef; border-radius: 9px; color: var(--dash-ink); background: #fff; font: inherit; font-size: .78rem; }
+.emoji-customizer__row input:first-of-type { font-size: 1.35rem; text-align: center; }
+.emoji-customizer__row input:focus, .emoji-customizer__row select:focus { border-color: #5a9af1; outline: 0; box-shadow: 0 0 0 3px rgba(23, 110, 232, .1); }
+.emoji-customizer__score { display: grid; width: 28px; height: 28px; place-items: center; border-radius: 9px; color: #176ee8; background: #e8f1ff; font-size: .72rem; font-weight: 900; }
+.app-dialog .emoji-customizer { margin-top: 0; }
+
+@media (max-width: 560px) {
+  .emoji-customizer { padding: 12px; }
+  .emoji-customizer__row { grid-template-columns: 26px minmax(48px, .5fr) minmax(86px, 1fr); }
+  .emoji-customizer__row select { grid-column: 2 / -1; }
+}
+
 @media (max-width: 1120px) {
   .device-row { align-items: stretch; flex-direction: column; gap: 14px; }
   .device-assign { width: 100%; min-width: 0; }

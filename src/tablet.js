@@ -12,6 +12,14 @@ const KEYS = {
 const WEB_APP_VERSION = 'web-kiosk/0.3.0';
 const ANDROID_APP_VERSION = 'android-kiosk/1.1.0';
 const DEFAULT_RATING_QUESTION = 'Como foi a sua experiência?';
+const DEFAULT_EMOJI_OPTIONS = [
+  { value: '1', emoji: '😡', label: 'Péssimo', animation: 'shake' },
+  { value: '2', emoji: '😕', label: 'Ruim', animation: 'float' },
+  { value: '3', emoji: '😐', label: 'Regular', animation: 'pulse' },
+  { value: '4', emoji: '🙂', label: 'Bom', animation: 'bounce' },
+  { value: '5', emoji: '😍', label: 'Ótimo', animation: 'heart' },
+];
+const ALLOWED_EMOJI_ANIMATIONS = new Set(['shake', 'float', 'pulse', 'bounce', 'heart']);
 const MAX_PENDING = 200;
 
 function randomSecret() {
@@ -167,6 +175,18 @@ async function runtimeTelemetry() {
 
 function isTransientError(error) {
   return !error?.status || error.status === 408 || error.status >= 500;
+}
+
+function emojiOptions(options) {
+  return DEFAULT_EMOJI_OPTIONS.map((fallback, index) => {
+    const item = Array.isArray(options) ? options[index] : null;
+    return {
+      value: String(index + 1),
+      emoji: String(item?.emoji || (typeof item === 'string' ? item : fallback.emoji)).trim() || fallback.emoji,
+      label: String(item?.label || fallback.label).trim() || fallback.label,
+      animation: ALLOWED_EMOJI_ANIMATIONS.has(item?.animation) ? item.animation : fallback.animation,
+    };
+  });
 }
 
 export async function renderTablet(root) {
@@ -339,8 +359,8 @@ export async function renderTablet(root) {
     if (question.type === 'options') {
       return `<fieldset class="question"><legend>${escapeHtml(question.text)}</legend><div class="option-grid">${(question.options || []).map((option) => `<label><input type="radio" name="${name}" value="${escapeHtml(option)}" required><span>${escapeHtml(option)}</span></label>`).join('')}</div></fieldset>`;
     }
-    const faces = [['1', '😡', 'Péssimo'], ['2', '😕', 'Ruim'], ['3', '😐', 'Regular'], ['4', '🙂', 'Bom'], ['5', '😍', 'Ótimo']];
-    return `<fieldset class="question"><legend>${escapeHtml(question.text)}</legend><div class="rating-grid emoji-grid" data-rating-question="${name}">${faces.map(([value, emoji, label]) => `<label><input type="radio" name="${name}" value="${value}" data-rating-label="${escapeHtml(label)}" required><span class="emoji-face emoji-face--${value}">${emoji}</span><small>${label}</small></label>`).join('')}</div><div class="rating-confirmation" data-rating-confirm="${name}" hidden><p>Você confirma sua nota? <strong data-rating-value>0</strong></p><button class="rating-confirm-button" type="button">Sim</button></div></fieldset>`;
+    const faces = emojiOptions(question.options);
+    return `<fieldset class="question"><legend>${escapeHtml(question.text)}</legend><div class="rating-grid emoji-grid" data-rating-question="${name}">${faces.map(({ value, emoji, label, animation }) => `<label><input type="radio" name="${name}" value="${value}" data-rating-label="${escapeHtml(label)}" required><span class="emoji-face emoji-face--${value} emoji-motion--${animation}" role="img" aria-label="${escapeHtml(label)}"><span class="emoji-glyph">${escapeHtml(emoji)}</span><span class="emoji-spark" aria-hidden="true">✦</span></span><small>${escapeHtml(label)}</small></label>`).join('')}</div><div class="rating-confirmation" data-rating-confirm="${name}" hidden><p>Você confirma sua nota? <strong data-rating-value>0</strong></p><button class="rating-confirm-button" type="button">Sim</button></div></fieldset>`;
   }
 
   async function submitSurvey(event) {
