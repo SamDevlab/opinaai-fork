@@ -58,6 +58,27 @@ async function api(path, options = {}) {
 
 function renderAdmin(root) {
   document.body.classList.remove('dashboard-mode');
+  const token = localStorage.getItem('opina_token');
+  if (token) {
+    root.innerHTML = `<main class="session-restore" role="status" aria-live="polite"><span class="session-restore__mark" aria-hidden="true">${dashboardIcon('spark')}</span><span>Carregando seu painel...</span></main>`;
+    api('/api/me').then((user) => {
+      renderDashboard(root, user).catch(() => renderSessionError(root));
+    }, () => {
+      localStorage.removeItem('opina_token');
+      renderLogin(root);
+    });
+    return;
+  }
+  renderLogin(root);
+}
+
+function renderSessionError(root) {
+  root.innerHTML = `<main class="session-restore" role="alert"><span class="session-restore__mark" aria-hidden="true">${dashboardIcon('spark')}</span><span>Não foi possível carregar o painel.</span><button id="retry-session" class="session-restore__retry" type="button">Tentar novamente</button></main>`;
+  root.querySelector('#retry-session').addEventListener('click', () => renderAdmin(root));
+}
+
+function renderLogin(root) {
+  document.body.classList.remove('dashboard-mode');
   root.innerHTML = `
     <section class="login-shell" aria-label="Acesso administrativo Opina AI">
       <div class="brand-panel">
@@ -118,14 +139,9 @@ function renderAdmin(root) {
     }
   });
 
-  const token = localStorage.getItem('opina_token');
-  if (token) {
-    api('/api/me').then((user) => renderDashboard(root, user)).catch(() => localStorage.removeItem('opina_token'));
-  }
 }
 
 async function renderDashboard(root, user) {
-  document.body.classList.add('dashboard-mode');
   let selectedTenantId = user.tenantId || '';
   let tenants = [];
   if (user.role === 'SUPERADMIN') tenants = await api('/api/tenants');
@@ -133,6 +149,7 @@ async function renderDashboard(root, user) {
 
   const tenantOptions = () => tenants.map((tenant) => `<option value="${tenant.id}" ${String(tenant.id) === String(selectedTenantId) ? 'selected' : ''}>${escapeHtml(tenant.name)}</option>`).join('');
 
+  document.body.classList.add('dashboard-mode');
   root.innerHTML = `
     <main class="dashboard dashboard-shell">
       <aside class="dashboard-sidebar">
