@@ -12,6 +12,7 @@ test('tablet keeps emoji and stars behind the same confirmation contract', () =>
   assert.match(tabletSource, /data-rating-confirm/);
   assert.match(tabletSource, /data-rating-value/);
   assert.match(tabletSource, /rating-confirm-button/);
+  assert.match(tabletSource, /emoji-face--\$\{value\}/);
   assert.match(tabletSource, /get\('type'\) === 'emoji'/);
 });
 
@@ -24,6 +25,9 @@ test('rating question has an editable default title', () => {
 test('emoji selection uses rounded styling and a lightweight animation', () => {
   assert.match(tabletCssSource, /appearance:none/);
   assert.match(tabletCssSource, /emoji-pop/);
+  assert.match(tabletCssSource, /emoji-angry/);
+  assert.match(tabletCssSource, /emoji-happy/);
+  assert.match(tabletCssSource, /emoji-love/);
   assert.match(tabletCssSource, /\.emoji-grid label:has\(input:checked\) \{ border-color:#c9daf2/);
   assert.match(tabletCssSource, /\.emoji-grid label \{[^}]*border-radius:24px/);
 });

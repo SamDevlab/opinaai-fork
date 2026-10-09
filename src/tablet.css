@@ -42,8 +42,18 @@ body { display:block; min-height:100vh; margin:0; background:#eef5ff; }
 .emoji-grid input:checked + .emoji-face, .scale-grid input:checked + span, .option-grid input:checked + span { transform:translateY(-3px); }
 .emoji-grid label:has(input:checked) { border-color:#c9daf2; background:#f8fbff; box-shadow:0 10px 26px rgba(23,110,232,.12); transform:translateY(-2px); }
 .emoji-grid label:has(input:checked) .emoji-face { animation:emoji-pop .42s cubic-bezier(.2,.85,.35,1.3) both; }
+.emoji-grid label:has(input[value="1"]:checked) .emoji-face { animation:emoji-angry .58s ease both; }
+.emoji-grid label:has(input[value="2"]:checked) .emoji-face { animation:emoji-sad .5s cubic-bezier(.2,.8,.3,1.2) both; }
+.emoji-grid label:has(input[value="3"]:checked) .emoji-face { animation:emoji-neutral .55s ease both; }
+.emoji-grid label:has(input[value="4"]:checked) .emoji-face { animation:emoji-happy .62s cubic-bezier(.2,.85,.35,1.35) both; }
+.emoji-grid label:has(input[value="5"]:checked) .emoji-face { animation:emoji-love .68s cubic-bezier(.2,.85,.35,1.35) both; }
 .scale-grid input:checked + span, .option-grid input:checked + span { border-color:#176ee8; background:#eef5ff; box-shadow:0 10px 26px rgba(23,110,232,.16); }
 @keyframes emoji-pop { 0% { opacity:.7; transform:scale(.72) rotate(-8deg); } 55% { opacity:1; transform:scale(1.16) rotate(4deg); } 100% { transform:scale(1) rotate(0); } }
+@keyframes emoji-angry { 0%,100% { transform:scale(1) rotate(0); } 18% { transform:scale(1.08) rotate(-9deg); } 36% { transform:scale(1.08) rotate(9deg); } 54% { transform:scale(1.05) rotate(-6deg); } 72% { transform:scale(1.03) rotate(5deg); } }
+@keyframes emoji-sad { 0% { opacity:.7; transform:translateY(-12px) scale(.82); } 58% { opacity:1; transform:translateY(4px) scale(1.05); } 100% { transform:translateY(0) scale(1); } }
+@keyframes emoji-neutral { 0%,100% { transform:scale(1); } 45% { transform:scale(1.14); } }
+@keyframes emoji-happy { 0% { transform:translateY(8px) scale(.86) rotate(-5deg); } 45% { transform:translateY(-10px) scale(1.12) rotate(4deg); } 72% { transform:translateY(2px) scale(1.04) rotate(-2deg); } 100% { transform:translateY(0) scale(1) rotate(0); } }
+@keyframes emoji-love { 0% { opacity:.75; transform:scale(.76) rotate(-8deg); } 38% { opacity:1; transform:scale(1.2) rotate(6deg); } 66% { transform:scale(.98) rotate(-2deg); } 100% { transform:scale(1) rotate(0); } }
 .kiosk-submit { align-self:center; min-width:min(520px,90%); min-height:76px; border:0; border-radius:22px; background:#176ee8; color:#fff; font-size:clamp(20px,2.1vw,30px); font-weight:900; box-shadow:0 14px 30px rgba(23,110,232,.23); }
 .survey-kiosk footer { margin-top:28px; color:#94a1b4; text-align:center; font-size:14px; }
 .kiosk-exit-dialog { position:fixed; inset:0; z-index:20; display:grid; place-items:center; padding:24px; background:rgba(6,25,57,.62); backdrop-filter:blur(8px); }

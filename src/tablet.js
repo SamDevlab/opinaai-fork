@@ -340,7 +340,7 @@ export async function renderTablet(root) {
       return `<fieldset class="question"><legend>${escapeHtml(question.text)}</legend><div class="option-grid">${(question.options || []).map((option) => `<label><input type="radio" name="${name}" value="${escapeHtml(option)}" required><span>${escapeHtml(option)}</span></label>`).join('')}</div></fieldset>`;
     }
     const faces = [['1', '😡', 'Péssimo'], ['2', '😕', 'Ruim'], ['3', '😐', 'Regular'], ['4', '🙂', 'Bom'], ['5', '😍', 'Ótimo']];
-    return `<fieldset class="question"><legend>${escapeHtml(question.text)}</legend><div class="rating-grid emoji-grid" data-rating-question="${name}">${faces.map(([value, emoji, label]) => `<label><input type="radio" name="${name}" value="${value}" data-rating-label="${escapeHtml(label)}" required><span class="emoji-face">${emoji}</span><small>${label}</small></label>`).join('')}</div><div class="rating-confirmation" data-rating-confirm="${name}" hidden><p>Você confirma sua nota? <strong data-rating-value>0</strong></p><button class="rating-confirm-button" type="button">Sim</button></div></fieldset>`;
+    return `<fieldset class="question"><legend>${escapeHtml(question.text)}</legend><div class="rating-grid emoji-grid" data-rating-question="${name}">${faces.map(([value, emoji, label]) => `<label><input type="radio" name="${name}" value="${value}" data-rating-label="${escapeHtml(label)}" required><span class="emoji-face emoji-face--${value}">${emoji}</span><small>${label}</small></label>`).join('')}</div><div class="rating-confirmation" data-rating-confirm="${name}" hidden><p>Você confirma sua nota? <strong data-rating-value>0</strong></p><button class="rating-confirm-button" type="button">Sim</button></div></fieldset>`;
   }
 
   async function submitSurvey(event) {
