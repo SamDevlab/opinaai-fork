@@ -13,6 +13,7 @@ import { readdir, readFile } from 'node:fs/promises';
 
 const { Pool } = pg;
 const app = express();
+app.set('trust proxy', 1);
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const migrationsDir = path.join(__dirname, 'migrations');
 const pool = new Pool({
