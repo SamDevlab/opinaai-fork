@@ -153,7 +153,7 @@ async function renderDashboard(root, user) {
   root.innerHTML = `
     <main class="dashboard dashboard-shell">
       <aside class="dashboard-sidebar">
-        <div class="sidebar-brand"><span class="brand-symbol" aria-hidden="true">${dashboardIcon('spark')}</span><div><strong>Opina <em>AI</em></strong><small>Painel de satisfação</small></div></div>
+        <div class="sidebar-brand sidebar-brand--art"><img class="sidebar-brand__image" src="/assets/opinaai-satisfaction-brand.png" alt="Opina AI com expressões de satisfação"></div>
         <p class="sidebar-label">NAVEGAÇÃO</p>
         <nav class="dashboard-nav" aria-label="Navegação do painel">
           <a class="dashboard-nav__item is-active" data-view="overview" href="#overview"><span aria-hidden="true">${dashboardIcon('home')}</span> Visão geral</a>

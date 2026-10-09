@@ -68,6 +68,9 @@
 
 .sidebar-brand, .mobile-brand { display: flex; align-items: center; gap: 16px; }
 .sidebar-brand { min-width: 0; padding: 0; }
+.sidebar-brand--art { display: block; }
+.sidebar-brand__image { display: block; width: 100%; max-width: 206px; height: auto; border-radius: 13px; }
+.sidebar-brand--art + .sidebar-label { margin-top: 18px; }
 .sidebar-brand > div { min-width: 0; }
 .brand-symbol { display: grid; width: 50px; height: 50px; flex: 0 0 50px; place-items: center; border-radius: 15px; color: #fff; background: #2c72f0; font-size: 20px; box-shadow: 0 8px 18px rgba(46, 113, 239, .3); }
 .sidebar-brand strong, .mobile-brand strong { color: #fff; font-size: 1.65rem; letter-spacing: -.04em; }
@@ -127,6 +130,7 @@
 .metric-card { min-height: 142px; padding: 20px; border: 1px solid var(--dash-line); border-radius: 17px; background: #fff; box-shadow: 0 9px 24px rgba(26, 61, 108, .045); text-align: center; }
 .metric-card__top { display: flex; flex-direction: column; align-items: center; justify-content: flex-start; gap: 8px; color: var(--dash-muted); font-size: .74rem; font-weight: 800; }
 .metric-card__icon { display: grid; width: 40px; height: 40px; flex: 0 0 40px; place-items: center; border: 1px solid rgba(36, 105, 219, .08); border-radius: 12px; color: #2469db; background: #eaf2ff; }
+.metric-card span.metric-card__icon { display: grid; margin-top: 0; place-items: center; line-height: 0; }
 .metric-card strong { display: block; margin-top: 12px; color: var(--dash-ink); font-size: 2rem; letter-spacing: -.06em; }
 .metric-card small { display: block; margin-top: 3px; color: #8a98ad; font-size: .72rem; }
 .metric-card--green .metric-card__icon { border-color: rgba(22, 141, 101, .1); color: #168d65; background: #e6f8f1; }
