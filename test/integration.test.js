@@ -250,3 +250,21 @@ test('integra autenticação, isolamento, pareamento, respostas e relatório', a
   const crossSurvey = await api(`/api/surveys/${surveyA.id}`, { token: adminBToken });
   assert.equal(crossSurvey.response.status, 403);
 });
+
+test('rate limit separa clientes encaminhados pelo proxy confiável', async () => {
+  const suffix = Number.parseInt(tag.slice(0, 2), 16) % 254 + 1;
+  const firstIp = `198.51.100.${suffix}`;
+  const secondIp = `203.0.113.${suffix}`;
+  const invalidLogin = (ip) => api('/api/auth/login', {
+    method: 'POST',
+    headers: { 'X-Forwarded-For': ip },
+    body: JSON.stringify({ email: `missing-${tag}@opina.test`, password: 'invalid' }),
+  });
+
+  for (let attempt = 0; attempt < 10; attempt += 1) {
+    const { response } = await invalidLogin(firstIp);
+    assert.equal(response.status, 401);
+  }
+  assert.equal((await invalidLogin(firstIp)).response.status, 429);
+  assert.equal((await invalidLogin(secondIp)).response.status, 401);
+});

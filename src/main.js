@@ -43,15 +43,16 @@ function escapeHtml(value) {
 
 function dashboardIcon(name) {
   const paths = {
-    spark: '<path d="m12 3 1.7 5.3L19 10l-5.3 1.7L12 17l-1.7-5.3L5 10l5.3-1.7L12 3Z"/><path d="m19 16 .8 2.2L22 19l-2.2.8L19 22l-.8-2.2L16 19l2.2-.8L19 16Z"/>',
+    spark: '<path d="m12 3.5 2.45 5.7 6.05 2.4-6.05 2.4L12 19.8 9.55 14 3.5 11.6l6.05-2.4L12 3.5Z" fill="currentColor" stroke="currentColor" stroke-linejoin="round"/><path d="m19.2 16.6.7 1.8 1.8.7-1.8.7-.7 1.8-.7-1.8-1.8-.7 1.8-.7.7-1.8Z" fill="currentColor" stroke="currentColor" stroke-linejoin="round"/>',
     home: '<path d="m3 10 9-7 9 7v10a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1V10Z"/>',
-    settings: '<path d="M12 8.5a3.5 3.5 0 1 0 0 7 3.5 3.5 0 0 0 0-7Z"/><path d="m19.4 15 .1.1a1.7 1.7 0 0 1-2.4 2.4l-.1-.1a1.7 1.7 0 0 0-2.9 1.2v.2a1.7 1.7 0 0 1-3.4 0v-.2a1.7 1.7 0 0 0-2.9-1.2l-.1.1a1.7 1.7 0 1 1-2.4-2.4l.1-.1a1.7 1.7 0 0 0-1.2-2.9h-.2a1.7 1.7 0 0 1 0-3.4h.2a1.7 1.7 0 0 0 1.2-2.9l-.1-.1a1.7 1.7 0 1 1 2.4-2.4l.1.1A1.7 1.7 0 0 0 10.7 2h.2a1.7 1.7 0 0 1 3.4 0v.2a1.7 1.7 0 0 0 2.9 1.2l.1-.1a1.7 1.7 0 1 1 2.4 2.4l-.1.1a1.7 1.7 0 0 0 1.2 2.9h.2a1.7 1.7 0 0 1 0 3.4h-.2a1.7 1.7 0 0 0-1.4 2.9Z"/>',
     tablet: '<rect x="6" y="2.5" width="12" height="19" rx="2"/><path d="M10 5h4M11 18.5h2"/>',
     survey: '<path d="M5 3.5h14a1 1 0 0 1 1 1v15a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1v-15a1 1 0 0 1 1-1Z"/><path d="M8 8h8M8 12h8M8 16h5"/>',
     chart: '<path d="M4 19V5M4 19h16"/><path d="M8 16v-5M12 16V7M16 16v-8"/>',
-    heart: '<path d="M20.8 8.7c0 5.3-8.8 10.1-8.8 10.1S3.2 14 3.2 8.7A4.7 4.7 0 0 1 12 6.2a4.7 4.7 0 0 1 8.8 2.5Z"/>',
-    star: '<path d="m12 3 2.8 5.7 6.2.9-4.5 4.4 1.1 6.2-5.6-2.9-5.6 2.9 1.1-6.2L3 9.6l6.2-.9L12 3Z"/>',
-    alert: '<path d="M12 4 21 20H3L12 4Z"/><path d="M12 9v5M12 17h.01"/>',
+    printer: '<path d="M6 9V3h12v6M6 17H4a2 2 0 0 1-2-2v-4a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v4a2 2 0 0 1-2 2h-2"/><path d="M6 14h12v7H6z"/><path d="M18 12h.01"/>',
+    evaluations: '<rect x="5" y="4.5" width="14" height="17" rx="2.5"/><path d="M9 4.5v-1h6v1M8.5 10h2M13 10h2.5M8.5 14h2M13 14h2.5M8.5 18h7"/>',
+    satisfaction: '<circle cx="12" cy="12" r="9"/><path d="M9 10h.01M15 10h.01M8.5 14.5c.9 1.3 2.1 2 3.5 2s2.6-.7 3.5-2"/>',
+    rating: '<path d="m12 3.5 2.6 5.3 5.9.9-4.2 4.1 1 5.8L12 16.8l-5.3 2.8 1-5.8-4.2-4.1 5.9-.9L12 3.5Z" fill="currentColor" stroke="currentColor"/>',
+    dissatisfaction: '<circle cx="12" cy="12" r="9"/><path d="M9 10h.01M15 10h.01M8.5 16c.9-1.4 2.1-2 3.5-2s2.6.6 3.5 2"/>',
   };
   return `<svg class="dashboard-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${paths[name] || paths.spark}</svg>`;
 }
@@ -105,6 +106,27 @@ async function confirmAction(title, description) {
 
 function renderAdmin(root) {
   document.body.classList.remove('dashboard-mode');
+  const token = localStorage.getItem('opina_token');
+  if (token) {
+    root.innerHTML = `<main class="session-restore" role="status" aria-live="polite"><span class="session-restore__mark" aria-hidden="true">${dashboardIcon('spark')}</span><span>Carregando seu painel...</span></main>`;
+    api('/api/me').then((user) => {
+      renderDashboard(root, user).catch(() => renderSessionError(root));
+    }, () => {
+      localStorage.removeItem('opina_token');
+      renderLogin(root);
+    });
+    return;
+  }
+  renderLogin(root);
+}
+
+function renderSessionError(root) {
+  root.innerHTML = `<main class="session-restore" role="alert"><span class="session-restore__mark" aria-hidden="true">${dashboardIcon('spark')}</span><span>Não foi possível carregar o painel.</span><button id="retry-session" class="session-restore__retry" type="button">Tentar novamente</button></main>`;
+  root.querySelector('#retry-session').addEventListener('click', () => renderAdmin(root));
+}
+
+function renderLogin(root) {
+  document.body.classList.remove('dashboard-mode');
   root.innerHTML = `
     <section class="login-shell" aria-label="Acesso administrativo Opina AI">
       <div class="brand-panel">
@@ -113,13 +135,7 @@ function renderAdmin(root) {
           <p class="eyebrow">PESQUISA DE SATISFAÇÃO DIGITAL</p>
           <h1>Pesquisas de<br><span>satisfação</span></h1>
           <p class="intro">Colete opiniões no tablet e acompanhe a experiência em tempo real.</p>
-          <div class="feedback-visual" aria-label="Cartão ilustrativo de opiniões">
-            <div class="feedback-visual__glow"></div>
-            <div class="feedback-card">
-              <div class="feedback-card__brand"><span class="sparkle-icon" aria-hidden="true">✦</span><strong>Opina <em>AI</em></strong></div>
-              <div class="faces" aria-hidden="true"><img class="faces-reference" src="/assets/faces-reference.png" alt=""></div>
-            </div>
-          </div>
+          <img class="feedback-visual" src="/assets/opinaai-satisfaction-illustration.png" alt="Cartão Opina AI com rostos que representam níveis de satisfação">
           <p class="tagline">Tablet, pesquisa e resultado. Sem distrações.</p>
         </div>
       </div>
@@ -134,7 +150,12 @@ function renderAdmin(root) {
             <label for="password">Senha</label>
             <div class="password-field">
               <input id="password" name="password" type="password" placeholder="Digite sua senha" autocomplete="current-password" required>
-              <button id="toggle-password" class="icon-button" type="button" aria-label="Mostrar senha" title="Mostrar senha">◉</button>
+              <button id="toggle-password" class="icon-button" type="button" aria-label="Mostrar senha" title="Mostrar senha" aria-pressed="false">
+                <svg class="password-visibility-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  <path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7-10-7-10-7Z"></path>
+                  <circle cx="12" cy="12" r="3"></circle>
+                </svg>
+              </button>
             </div>
             <button class="submit-button" type="submit">Entrar</button>
             <p id="form-message" class="form-message" role="status" aria-live="polite"></p>
@@ -151,8 +172,20 @@ function renderAdmin(root) {
   togglePassword.addEventListener('click', () => {
     const isHidden = passwordInput.type === 'password';
     passwordInput.type = isHidden ? 'text' : 'password';
-    togglePassword.textContent = isHidden ? '◉' : '◌';
     togglePassword.setAttribute('aria-label', isHidden ? 'Ocultar senha' : 'Mostrar senha');
+    togglePassword.setAttribute('title', isHidden ? 'Ocultar senha' : 'Mostrar senha');
+    togglePassword.setAttribute('aria-pressed', String(isHidden));
+    togglePassword.innerHTML = isHidden
+      ? `<svg class="password-visibility-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <path d="M3 3l18 18"></path>
+          <path d="M10.6 10.6a2 2 0 0 0 2.8 2.8"></path>
+          <path d="M9.9 5.2A10.8 10.8 0 0 1 12 5c6.4 0 10 7 10 7a15.8 15.8 0 0 1-3.1 3.9"></path>
+          <path d="M6.2 6.2C3.5 8 2 12 2 12s3.6 7 10 7c1.1 0 2.1-.2 3-.5"></path>
+        </svg>`
+      : `<svg class="password-visibility-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7-10-7-10-7Z"></path>
+          <circle cx="12" cy="12" r="3"></circle>
+        </svg>`;
   });
 
   loginForm.addEventListener('submit', async (event) => {
@@ -178,7 +211,6 @@ function renderAdmin(root) {
 }
 
 async function renderDashboard(root, user) {
-  document.body.classList.add('dashboard-mode');
   let selectedTenantId = user.tenantId || '';
   let tenants = [];
   if (user.role === 'SUPERADMIN') tenants = await api('/api/tenants');
@@ -186,6 +218,7 @@ async function renderDashboard(root, user) {
 
   const tenantOptions = () => tenants.map((tenant) => `<option value="${tenant.id}" ${String(tenant.id) === String(selectedTenantId) ? 'selected' : ''}>${escapeHtml(tenant.name)}</option>`).join('');
 
+  document.body.classList.add('dashboard-mode');
   root.innerHTML = `
     <main class="dashboard dashboard-shell">
       <aside class="dashboard-sidebar">
@@ -193,12 +226,11 @@ async function renderDashboard(root, user) {
         <p class="sidebar-label">NAVEGAÇÃO</p>
         <nav class="dashboard-nav" aria-label="Navegação do painel">
           <a class="dashboard-nav__item is-active" data-view="overview" href="#overview"><span aria-hidden="true">${dashboardIcon('home')}</span> Visão geral</a>
-          <a class="dashboard-nav__item" data-view="operations" href="#operations"><span aria-hidden="true">${dashboardIcon('settings')}</span> Configuração</a>
           <a class="dashboard-nav__item" data-view="tablets" href="#tablets"><span aria-hidden="true">${dashboardIcon('tablet')}</span> Tablets</a>
           <a class="dashboard-nav__item" data-view="surveys" href="#surveys"><span aria-hidden="true">${dashboardIcon('survey')}</span> Pesquisas</a>
           <a class="dashboard-nav__item" data-view="reports" href="#reports"><span aria-hidden="true">${dashboardIcon('chart')}</span> Relatórios</a>
         </nav>
-        <div class="sidebar-profile"><span class="profile-avatar">${escapeHtml(String(user.name || 'A').slice(0, 1).toUpperCase())}</span><div><strong>${escapeHtml(user.name)}</strong><span>Administrador</span></div></div>
+        <div class="sidebar-profile"><span class="profile-avatar">${escapeHtml(String(user.name || 'A').slice(0, 1).toUpperCase())}</span><div><strong>${escapeHtml(user.name)}</strong><span>${user.role === 'SUPERADMIN' ? 'Superadministrador' : 'Administrador'}</span></div></div>
       </aside>
       <section class="dashboard-content">
         <header class="dashboard-topbar">
@@ -213,25 +245,25 @@ async function renderDashboard(root, user) {
           <div class="section-heading"><div><h2>Resumo</h2></div><span class="section-counter">Período atual</span></div>
           <div id="report-metrics" class="metric-grid overview-metrics"></div>
         </section>
-        <section id="operations" class="dashboard-section" data-dashboard-view="operations">
-          <div class="section-heading"><div><p class="section-kicker">CONFIGURAÇÃO</p><h2>Configurar operação</h2></div></div>
-          <div class="dashboard-grid action-grid">
-            <article class="dashboard-card action-card action-card--survey"><div class="action-card__icon" aria-hidden="true">${dashboardIcon('survey')}</div><div class="action-card__intro"><h3>Nova pesquisa</h3><p>Crie a pergunta exibida no tablet.</p></div><form id="survey-form" class="form-stack"><div class="form-grid"><label>Título da pesquisa<input name="title" required placeholder="Ex.: Experiência de atendimento"></label><label>Pergunta para o cliente<input name="question" required value="${DEFAULT_RATING_QUESTION}" placeholder="Digite a pergunta exibida no tablet"></label></div><label>Tipo de resposta<select name="type"><option value="emoji">Carinhas de satisfação</option><option value="stars">Estrelas (1 a 5)</option><option value="scale">Nota de 1 a 10</option><option value="options">Opções personalizadas</option></select></label><label class="options-field is-hidden">Opções separadas por vírgula<input class="options-field is-hidden" name="options" placeholder="Ótimo, Bom, Regular, Ruim"></label><div class="form-submit-row"><button class="submit-button compact" type="submit">Cadastrar pesquisa <span aria-hidden="true">→</span></button><p class="inline-message" id="survey-message" role="status"></p></div></form></article>
-            <article class="dashboard-card action-card action-card--pair"><div class="action-card__icon" aria-hidden="true">${dashboardIcon('tablet')}</div><div class="action-card__intro"><h3>Parear tablet</h3><p>Conecte um dispositivo à operação.</p></div><form id="pair-form" class="form-stack"><label>Código exibido no tablet<input name="activationCode" inputmode="numeric" maxlength="6" pattern="[0-9]{6}" required placeholder="Ex.: 482913"></label><div class="form-grid"><label>Nome do tablet<input name="deviceName" placeholder="Tablet Recepção"></label><label>Unidade / local<input name="locationName" value="Recepção" required></label></div><div class="form-submit-row"><button class="submit-button compact" type="submit">Parear dispositivo <span aria-hidden="true">→</span></button><p class="inline-message" id="pair-message" role="status"></p></div></form></article>
-          </div>
+        ${user.role === 'SUPERADMIN' ? `<section id="companies" class="dashboard-section admin-tools" data-dashboard-view="overview"><details class="admin-details"><summary><span><small>ADMINISTRAÇÃO</small><strong>Gerenciar empresas</strong></span><b>Adicionar empresa <span aria-hidden="true">＋</span></b></summary><article class="dashboard-card"><form id="tenant-form" class="form-grid form-grid--tenant"><label>Nome da empresa<input name="name" required></label><label>E-mail do administrador<input name="email" type="email" required></label><label>Senha inicial<input name="password" type="password" minlength="8" required></label><div class="form-submit-row"><button class="submit-button compact" type="submit">Criar empresa <span aria-hidden="true">→</span></button><p class="inline-message" id="tenant-message" role="status"></p></div></form></article></details></section>` : ''}
+        <section id="tablets" class="dashboard-section" data-dashboard-view="tablets">
+          <div class="section-heading"><div><p class="section-kicker">OPERAÇÃO</p><h2>Tablets</h2></div><span id="device-count" class="section-counter">Carregando...</span></div>
+          <article class="dashboard-card action-card action-card--pair"><div class="action-card__icon" aria-hidden="true">${dashboardIcon('tablet')}</div><div class="action-card__intro"><h3>Parear tablet</h3><p>Conecte um dispositivo à operação.</p></div><form id="pair-form" class="form-stack"><label>Código exibido no tablet<input name="activationCode" inputmode="numeric" maxlength="6" pattern="[0-9]{6}" required placeholder="Ex.: 482913"></label><div class="form-grid"><label>Nome do tablet<input name="deviceName" placeholder="Tablet Recepção"></label><label>Unidade / local<input name="locationName" value="Recepção" required></label></div><div class="form-submit-row"><button class="submit-button compact" type="submit">Parear dispositivo <span aria-hidden="true">→</span></button><p class="inline-message" id="pair-message" role="status"></p></div></form></article>
+          <div class="dashboard-card dashboard-card--flush"><div id="device-list" class="device-list">Carregando...</div></div>
         </section>
-        ${user.role === 'SUPERADMIN' ? `<section id="companies" class="dashboard-section admin-tools" data-dashboard-view="operations"><details class="admin-details"><summary><span><small>ADMINISTRAÇÃO</small><strong>Gerenciar empresas</strong></span><b>Adicionar empresa <span aria-hidden="true">＋</span></b></summary><article class="dashboard-card"><form id="tenant-form" class="form-grid form-grid--tenant"><label>Nome da empresa<input name="name" required></label><label>E-mail do administrador<input name="email" type="email" required></label><label>Senha inicial<input name="password" type="password" minlength="12" required></label><div class="form-submit-row"><button class="submit-button compact" type="submit">Criar empresa <span aria-hidden="true">→</span></button><p class="inline-message" id="tenant-message" role="status"></p></div></form></article></details></section>` : ''}
-        <section id="tablets" class="dashboard-section" data-dashboard-view="tablets"><div class="section-heading"><div><p class="section-kicker">OPERAÇÃO</p><h2>Tablets</h2></div><div class="section-heading__action"><span id="device-count" class="section-counter">Carregando...</span><a data-view="operations" href="#operations" class="text-link">+ Parear tablet</a></div></div><div class="dashboard-card dashboard-card--flush"><div id="device-list" class="device-list">Carregando...</div></div></section>
-        <section id="surveys" class="dashboard-section" data-dashboard-view="surveys"><div class="section-heading"><div><p class="section-kicker">CONTEÚDO</p><h2>Pesquisas</h2></div></div><div class="dashboard-card"><div id="survey-list" class="survey-list">Carregando...</div></div></section>
-        <section id="reports" class="dashboard-section report-section" data-dashboard-view="reports"><div class="section-heading"><div><p class="section-kicker">RESULTADOS</p><h2>Relatórios</h2></div><span id="report-total" class="section-counter">Carregando...</span></div><div class="dashboard-card report-card"><div class="report-toolbar"><div class="date-row"><label>De <input id="from" type="date"></label><label>Até <input id="to" type="date"></label></div><div class="report-filters"><label>Pesquisa<select id="report-survey"><option value="">Todas</option></select></label><label>Unidade<select id="report-location"><option value="">Todas</option></select></label><label>Tablet<select id="report-device"><option value="">Todos</option></select></label></div><button id="load-report" class="outline-button" type="button">Atualizar <span aria-hidden="true">↻</span></button></div><div class="report-results"><div class="report-results__header"><h3>Distribuição</h3><span>Respostas por avaliação</span></div><div id="report-distribution" class="distribution-list"></div><div id="report-list" class="report-list"></div></div></div></section>
+        <section id="surveys" class="dashboard-section" data-dashboard-view="surveys">
+          <div class="section-heading"><div><p class="section-kicker">CONTEÚDO</p><h2>Pesquisas</h2></div></div>
+          <article class="dashboard-card action-card action-card--survey"><div class="action-card__icon" aria-hidden="true">${dashboardIcon('survey')}</div><div class="action-card__intro"><h3>Nova pesquisa</h3><p>Crie a pergunta exibida no tablet.</p></div><form id="survey-form" class="form-stack"><div class="form-grid"><label>Título da pesquisa<input name="title" required placeholder="Ex.: Experiência de atendimento"></label><label>Pergunta para o cliente<input name="question" required value="${DEFAULT_RATING_QUESTION}" placeholder="Digite a pergunta exibida no tablet"></label></div><label>Tipo de resposta<select name="type"><option value="emoji">Carinhas de satisfação</option><option value="stars">Estrelas (1 a 5)</option><option value="scale">Nota de 1 a 10</option><option value="options">Opções personalizadas</option></select></label><label class="options-field is-hidden">Opções separadas por vírgula<input class="options-field is-hidden" name="options" placeholder="Ótimo, Bom, Regular, Ruim"></label><div class="form-submit-row"><button class="submit-button compact" type="submit">Cadastrar pesquisa <span aria-hidden="true">→</span></button><p class="inline-message" id="survey-message" role="status"></p></div></form></article>
+          <div class="dashboard-card"><div id="survey-list" class="survey-list">Carregando...</div></div>
+        </section>
+        <section id="reports" class="dashboard-section report-section" data-dashboard-view="reports"><div class="section-heading"><div><p class="section-kicker">RESULTADOS</p><h2>Relatórios</h2></div><div class="section-heading__action"><span id="report-total" class="section-counter">Carregando...</span><button id="print-report" class="outline-button report-print-button" type="button"><span aria-hidden="true">${dashboardIcon('printer')}</span>Imprimir relatório</button></div></div><p id="report-print-context" class="report-print-context"></p><div class="dashboard-card report-card"><div class="report-toolbar"><div class="date-row"><label>De <input id="from" type="date"></label><label>Até <input id="to" type="date"></label></div><div class="report-filters"><label>Pesquisa<select id="report-survey"><option value="">Todas</option></select></label><label>Unidade<select id="report-location"><option value="">Todas</option></select></label><label>Tablet<select id="report-device"><option value="">Todos</option></select></label></div><button id="load-report" class="outline-button" type="button">Atualizar <span aria-hidden="true">↻</span></button></div><div class="report-results"><div class="report-results__header"><h3>Distribuição</h3><span>Respostas por avaliação</span></div><div id="report-distribution" class="distribution-list"></div><div id="report-list" class="report-list"></div></div></div></section>
       </section>
     </main>`;
 
   const viewMeta = {
     overview: ['Visão geral', 'Acompanhe as avaliações e a operação dos tablets.'],
-    operations: ['Configuração', 'Crie pesquisas e conecte os tablets.'],
-    tablets: ['Tablets', 'Acompanhe o status e a pesquisa de cada dispositivo.'],
-    surveys: ['Pesquisas', 'Gerencie as perguntas exibidas nos tablets.'],
+    tablets: ['Tablets', 'Pareie dispositivos e acompanhe suas pesquisas.'],
+    surveys: ['Pesquisas', 'Crie e gerencie as perguntas exibidas nos tablets.'],
     reports: ['Relatórios', 'Leia os resultados da experiência dos clientes.'],
   };
   const showDashboardView = (view, updateHash = true) => {
@@ -342,6 +374,16 @@ async function renderDashboard(root, user) {
   };
 
   root.querySelector('#load-report').onclick = loadDashboardData;
+  const printReportButton = root.querySelector('#print-report');
+  printReportButton.onclick = async () => {
+    printReportButton.disabled = true;
+    try {
+      await loadDashboardData();
+      window.print();
+    } finally {
+      printReportButton.disabled = false;
+    }
+  };
 
   async function loadDashboardData() {
     const status = root.querySelector('#dashboard-status');
@@ -410,12 +452,28 @@ async function renderDashboard(root, user) {
       select.innerHTML = reportFilterOptions[id];
       if (selectedReportFilters[id]) select.value = selectedReportFilters[id];
     }
+    const formatReportDate = (value) => value ? value.split('-').reverse().join('/') : '';
+    const fromDate = root.querySelector('#from').value;
+    const toDate = root.querySelector('#to').value;
+    const periodLabel = fromDate && toDate
+      ? `${formatReportDate(fromDate)} a ${formatReportDate(toDate)}`
+      : fromDate ? `Desde ${formatReportDate(fromDate)}`
+        : toDate ? `Até ${formatReportDate(toDate)}` : 'Todo o período';
+    const printContext = [
+      `Período: ${periodLabel}`,
+      `Pesquisa: ${root.querySelector('#report-survey').selectedOptions[0]?.textContent.trim() || 'Todas'}`,
+      `Unidade: ${root.querySelector('#report-location').selectedOptions[0]?.textContent.trim() || 'Todas'}`,
+      `Tablet: ${root.querySelector('#report-device').selectedOptions[0]?.textContent.trim() || 'Todos'}`,
+    ];
+    const tenantName = root.querySelector('#tenant-filter')?.selectedOptions[0]?.textContent.trim();
+    if (tenantName) printContext.unshift(`Empresa: ${tenantName}`);
+    root.querySelector('#report-print-context').textContent = printContext.join(' · ');
     const report = reports?.metrics ? reports : { metrics: { total: 0, averageScore: null, satisfiedRate: 0, neutralRate: 0, dissatisfiedRate: 0 }, distribution: [], rows: [] };
     const metrics = report.metrics;
     root.querySelector('#report-total').textContent = `${metrics.total} avaliação(ões)`;
-    root.querySelector('#report-metrics').innerHTML = `<div class="metric-card metric-card--blue"><div class="metric-card__top"><span class="metric-card__icon" aria-hidden="true">${dashboardIcon('chart')}</span><span>Avaliações</span></div><strong>${metrics.total}</strong><small>No período</small></div><div class="metric-card metric-card--green"><div class="metric-card__top"><span class="metric-card__icon" aria-hidden="true">${dashboardIcon('heart')}</span><span>Satisfação</span></div><strong>${Number(metrics.satisfiedRate || 0).toLocaleString('pt-BR')}%</strong><small>Clientes satisfeitos</small></div><div class="metric-card metric-card--purple"><div class="metric-card__top"><span class="metric-card__icon" aria-hidden="true">${dashboardIcon('star')}</span><span>Nota média</span></div><strong>${metrics.averageScore === null ? '—' : Number(metrics.averageScore).toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}</strong><small>De 1 a 5</small></div><div class="metric-card metric-card--orange"><div class="metric-card__top"><span class="metric-card__icon" aria-hidden="true">${dashboardIcon('alert')}</span><span>Insatisfação</span></div><strong>${Number(metrics.dissatisfiedRate || 0).toLocaleString('pt-BR')}%</strong><small>Clientes insatisfeitos</small></div>`;
+    root.querySelector('#report-metrics').innerHTML = `<div class="metric-card metric-card--blue"><div class="metric-card__top"><span class="metric-card__icon" aria-hidden="true">${dashboardIcon('evaluations')}</span><span>Avaliações</span></div><strong>${metrics.total}</strong><small>No período</small></div><div class="metric-card metric-card--green"><div class="metric-card__top"><span class="metric-card__icon" aria-hidden="true">${dashboardIcon('satisfaction')}</span><span>Satisfação</span></div><strong>${Number(metrics.satisfiedRate || 0).toLocaleString('pt-BR')}%</strong><small>Clientes satisfeitos</small></div><div class="metric-card metric-card--purple"><div class="metric-card__top"><span class="metric-card__icon" aria-hidden="true">${dashboardIcon('rating')}</span><span>Nota média</span></div><strong>${metrics.averageScore === null ? '—' : Number(metrics.averageScore).toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}</strong><small>De 1 a 5</small></div><div class="metric-card metric-card--orange"><div class="metric-card__top"><span class="metric-card__icon" aria-hidden="true">${dashboardIcon('dissatisfaction')}</span><span>Insatisfação</span></div><strong>${Number(metrics.dissatisfiedRate || 0).toLocaleString('pt-BR')}%</strong><small>Clientes insatisfeitos</small></div>`;
     root.querySelector('#report-distribution').innerHTML = report.distribution?.length
-      ? report.distribution.map((item) => `<div class="distribution-row"><span class="distribution-label">${item.emoji} ${escapeHtml(item.label)}</span><span class="distribution-bar"><i style="width:${metrics.total ? Math.min(100, (item.count / metrics.total) * 100) : 0}%"></i></span><strong>${item.count}</strong></div>`).join('')
+      ? report.distribution.map((item) => `<div class="distribution-row"><span class="distribution-label"><span class="distribution-emoji" aria-hidden="true">${escapeHtml(item.emoji)}</span><span>${escapeHtml(item.label)}</span></span><span class="distribution-bar"><i style="width:${metrics.total ? Math.min(100, (item.count / metrics.total) * 100) : 0}%"></i></span><strong>${item.count}</strong></div>`).join('')
       : '<p class="empty-state">Sem distribuição no período.</p>';
     root.querySelector('#report-list').innerHTML = report.rows?.length
       ? report.rows.slice(0, 30).map((row) => `<div class="report-row"><span class="report-row__dot" aria-hidden="true"></span><div><strong>${escapeHtml(row.survey_title)}</strong><small>${escapeHtml(row.location_name || row.device_name || 'Tablet')} · ${escapeHtml(row.day)}</small></div><b>${row.total}</b></div>`).join('')
