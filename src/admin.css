@@ -125,14 +125,14 @@
 .metric-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; margin: 0; }
 .metric-card { min-height: 142px; padding: 20px; border: 1px solid var(--dash-line); border-radius: 17px; background: #fff; box-shadow: 0 9px 24px rgba(26, 61, 108, .045); }
 .metric-card__top { display: flex; align-items: center; justify-content: space-between; gap: 8px; color: var(--dash-muted); font-size: .74rem; font-weight: 800; }
-.metric-card__icon { display: grid; width: 31px; height: 31px; place-items: center; border-radius: 10px; color: #2469db; background: #e7f0ff; font-size: .95rem; }
+.metric-card__icon { display: grid; width: 40px; height: 40px; flex: 0 0 40px; place-items: center; border: 1px solid rgba(36, 105, 219, .08); border-radius: 12px; color: #2469db; background: #eaf2ff; }
 .metric-card strong { display: block; margin-top: 18px; color: var(--dash-ink); font-size: 2rem; letter-spacing: -.06em; }
 .metric-card small { display: block; margin-top: 3px; color: #8a98ad; font-size: .72rem; }
-.metric-card--green .metric-card__icon { color: #168d65; background: #e2f8ef; }
+.metric-card--green .metric-card__icon { border-color: rgba(22, 141, 101, .1); color: #168d65; background: #e6f8f1; }
 .metric-card--green strong { color: #148761; }
-.metric-card--purple .metric-card__icon { color: #6b51dc; background: #eeeaff; }
+.metric-card--purple .metric-card__icon { border-color: rgba(107, 81, 220, .1); color: #6b51dc; background: #f0edff; }
 .metric-card--purple strong { color: #684fd0; }
-.metric-card--orange .metric-card__icon { color: #c77b1e; background: #fff1db; }
+.metric-card--orange .metric-card__icon { border-color: rgba(199, 123, 30, .1); color: #c77b1e; background: #fff3e2; }
 .metric-card--orange strong { color: #b56a11; }
 
 .action-grid { grid-template-columns: 1.15fr .85fr; gap: 18px; margin: 0; }
@@ -298,8 +298,8 @@
 .section-heading .section-kicker { margin-bottom: 6px; }
 .metric-card { min-height: 126px; padding: 17px 18px; border-radius: 15px; box-shadow: 0 7px 20px rgba(26, 61, 108, .035); }
 .metric-card__top { font-size: .76rem; }
-.metric-card__icon { width: 34px; height: 34px; border-radius: 10px; }
-.metric-card__icon .dashboard-icon { width: 17px; height: 17px; }
+.metric-card__icon { width: 40px; height: 40px; flex-basis: 40px; border-radius: 12px; }
+.metric-card__icon .dashboard-icon { width: 20px; height: 20px; stroke-width: 2; }
 .metric-card strong { margin-top: 15px; font-size: 1.85rem; }
 .metric-card small { font-size: .7rem; }
 .action-card__icon .dashboard-icon { width: 19px; height: 19px; }
