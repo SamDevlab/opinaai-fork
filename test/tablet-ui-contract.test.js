@@ -3,6 +3,7 @@ import { readFile } from 'node:fs/promises';
 import { test } from 'node:test';
 
 const tabletSource = await readFile(new URL('../src/tablet.js', import.meta.url), 'utf8');
+const tabletCssSource = await readFile(new URL('../src/tablet.css', import.meta.url), 'utf8');
 
 test('tablet keeps emoji and stars behind the same confirmation contract', () => {
   assert.match(tabletSource, /\['emoji', 'stars'\]\.includes\(questions\[0\]\?\.type\)/);
@@ -10,6 +11,13 @@ test('tablet keeps emoji and stars behind the same confirmation contract', () =>
   assert.match(tabletSource, /data-rating-value/);
   assert.match(tabletSource, /rating-confirm-button/);
   assert.match(tabletSource, /get\('type'\) === 'emoji'/);
+});
+
+test('emoji selection uses rounded styling and a lightweight animation', () => {
+  assert.match(tabletCssSource, /appearance:none/);
+  assert.match(tabletCssSource, /emoji-pop/);
+  assert.match(tabletCssSource, /\.emoji-grid label:has\(input:checked\) \{ border-color:#c9daf2/);
+  assert.match(tabletCssSource, /\.emoji-grid label \{[^}]*border-radius:24px/);
 });
 
 test('native tablet has the QR-like two-finger admin exit flow', async () => {
