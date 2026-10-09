@@ -4,6 +4,8 @@ import { test } from 'node:test';
 
 const tabletSource = await readFile(new URL('../src/tablet.js', import.meta.url), 'utf8');
 const tabletCssSource = await readFile(new URL('../src/tablet.css', import.meta.url), 'utf8');
+const dashboardSource = await readFile(new URL('../src/main.js', import.meta.url), 'utf8');
+const serverSource = await readFile(new URL('../server/index.js', import.meta.url), 'utf8');
 
 test('tablet keeps emoji and stars behind the same confirmation contract', () => {
   assert.match(tabletSource, /\['emoji', 'stars'\]\.includes\(questions\[0\]\?\.type\)/);
@@ -11,6 +13,12 @@ test('tablet keeps emoji and stars behind the same confirmation contract', () =>
   assert.match(tabletSource, /data-rating-value/);
   assert.match(tabletSource, /rating-confirm-button/);
   assert.match(tabletSource, /get\('type'\) === 'emoji'/);
+});
+
+test('rating question has an editable default title', () => {
+  assert.match(tabletSource, /DEFAULT_RATING_QUESTION = 'Como foi a sua experiência\?'/);
+  assert.match(dashboardSource, /name="question"[^>]+value="\$\{DEFAULT_RATING_QUESTION\}"/);
+  assert.match(serverSource, /DEFAULT_RATING_QUESTION = 'Como foi a sua experiência\?'/);
 });
 
 test('emoji selection uses rounded styling and a lightweight animation', () => {

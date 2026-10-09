@@ -11,6 +11,7 @@ const KEYS = {
 };
 const WEB_APP_VERSION = 'web-kiosk/0.3.0';
 const ANDROID_APP_VERSION = 'android-kiosk/1.1.0';
+const DEFAULT_RATING_QUESTION = 'Como foi a sua experiência?';
 const MAX_PENDING = 200;
 
 function randomSecret() {
@@ -181,7 +182,7 @@ export async function renderTablet(root) {
       id: 'browser-test-survey',
       questions: [{
         id: 'browser-test-question',
-        text: browserTestType === 'emoji' ? 'Como você avalia seu atendimento?' : 'Como você avalia sua experiência conosco?',
+        text: DEFAULT_RATING_QUESTION,
         type: browserTestType,
         options: [],
       }],

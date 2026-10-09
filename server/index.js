@@ -21,6 +21,7 @@ const pool = new Pool({
 
 const jwtSecret = process.env.JWT_SECRET || (process.env.NODE_ENV === 'production' ? null : 'dev-only-change-me');
 if (!jwtSecret) throw new Error('JWT_SECRET é obrigatória em produção.');
+const DEFAULT_RATING_QUESTION = 'Como foi a sua experiência?';
 const allowedCorsOrigins = new Set(
   String(process.env.CORS_ORIGINS || '').split(',').map((origin) => origin.trim()).filter(Boolean),
 );
@@ -127,15 +128,18 @@ function emptyDistribution() {
 function normalizeQuestions(input) {
   const questions = Array.isArray(input) ? input.slice(0, 20) : [];
   const allowedTypes = new Set(['emoji', 'stars', 'scale', 'options']);
-  const normalized = questions.map((question, index) => ({
-    id: asPositiveInt(question?.id),
-    text: cleanText(question?.text, 500),
-    type: allowedTypes.has(question?.type) ? question.type : 'emoji',
-    position: index,
-    options: Array.isArray(question?.options)
-      ? question.options.map((item) => cleanText(item, 120)).filter(Boolean).slice(0, 12)
-      : [],
-  }));
+  const normalized = questions.map((question, index) => {
+    const type = allowedTypes.has(question?.type) ? question.type : 'emoji';
+    return {
+      id: asPositiveInt(question?.id),
+      text: cleanText(question?.text, 500) || (['emoji', 'stars'].includes(type) ? DEFAULT_RATING_QUESTION : ''),
+      type,
+      position: index,
+      options: Array.isArray(question?.options)
+        ? question.options.map((item) => cleanText(item, 120)).filter(Boolean).slice(0, 12)
+        : [],
+    };
+  });
   if (!normalized.length || normalized.some((question) => !question.text || (question.type === 'options' && question.options.length < 2))) {
     return null;
   }
