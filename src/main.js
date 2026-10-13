@@ -567,8 +567,14 @@ async function renderDashboard(root, user) {
       button.onclick = async () => {
         if (!await confirmAction('Desparear tablet?', 'A pesquisa ativa será removida do dispositivo.')) return;
         button.disabled = true;
-        try { await api(`/api/devices/${button.dataset.device}/unpair`, { method: 'POST' }); await loadDashboardData(); }
-        finally { button.disabled = false; }
+        const status = root.querySelector('#dashboard-status');
+        try {
+          await api(`/api/devices/${button.dataset.device}/unpair`, { method: 'POST' });
+          await loadDashboardData();
+          if (status) { status.innerHTML = '<i></i>Tablet despareado'; status.classList.remove('sync-status--error'); }
+        } catch (error) {
+          if (status) { status.innerHTML = `<i></i>${escapeHtml(error.message)}`; status.classList.add('sync-status--error'); }
+        } finally { button.disabled = false; }
       };
     });
     root.querySelectorAll('.deactivate-device').forEach((button) => {

@@ -194,6 +194,7 @@ export async function renderTablet(root) {
   let busy = false;
   let kioskUnlocked = false;
   let waitingForPairing = false;
+  let lastUnpairedConfigVersion = 0;
   const browserTestMode = !isNativeRuntime();
 
   if (browserTestMode) {
@@ -282,8 +283,37 @@ export async function renderTablet(root) {
     input.focus();
   }
 
-  function renderAdminUnlocked() {
-    root.innerHTML = '<main class="tablet-shell"><section class="tablet-card kiosk-unlocked-card"><p class="tablet-kicker">ACESSO ADMINISTRATIVO</p><h1>Tablet liberado</h1><p class="tablet-copy">O modo quiosque foi desativado temporariamente. Faça os ajustes necessários e bloqueie novamente antes de devolver o tablet ao atendimento.</p><button class="kiosk-reenter-button" type="button">Voltar ao modo quiosque</button></section></main>';
+  function renderAdminUnlocked({ notice = '', showPairingCode = false, error = false } = {}) {
+    root.innerHTML = `<main class="tablet-shell"><section class="tablet-card kiosk-unlocked-card"><p class="tablet-kicker">ACESSO ADMINISTRATIVO</p><h1>Tablet liberado</h1><p class="tablet-copy">O modo quiosque foi desativado temporariamente. Faça os ajustes necessários e bloqueie novamente antes de devolver o tablet ao atendimento.</p>${notice ? `<p class="kiosk-unlocked-notice${error ? ' kiosk-unlocked-notice--error' : ''}" role="status">${escapeHtml(notice)}</p>` : ''}${showPairingCode ? `<div class="kiosk-unlocked-pairing"><span>Novo código de pareamento</span><strong>${escapeHtml(id.activation)}</strong></div>` : ''}<div class="kiosk-unlocked-actions"><button class="kiosk-unpair-button" type="button">Desparear tablet</button><button class="kiosk-reenter-button" type="button">Voltar ao modo quiosque</button></div></section></main>`;
+    root.querySelector('.kiosk-unpair-button').onclick = async () => {
+      if (!window.confirm('Desparear este tablet? A pesquisa ativa e o vínculo atual serão removidos.')) return;
+      const button = root.querySelector('.kiosk-unpair-button');
+      button.disabled = true;
+      try {
+        const result = await deviceRequest('/api/devices/self/unpair', id, {
+          method: 'POST',
+          body: JSON.stringify({ deviceId: id.deviceId }),
+        });
+        activeSurvey = null;
+        waitingForPairing = true;
+        lastUnpairedConfigVersion = Number(result.configVersion || 0);
+        localStorage.removeItem(KEYS.surveyCache);
+        localStorage.setItem(KEYS.configVersion, String(lastUnpairedConfigVersion));
+        localStorage.removeItem(KEYS.activation);
+        ensureActivation(id);
+        try {
+          await register();
+          renderAdminUnlocked({ notice: 'Tablet despareado. Use o novo código no painel para pareá-lo novamente.', showPairingCode: true });
+        } catch {
+          renderAdminUnlocked({ notice: 'Tablet despareado. Não foi possível atualizar o código agora; verifique a conexão e tente novamente.', error: true });
+        }
+      } catch (unpairError) {
+        const message = unpairError?.status === 401 ? 'A sessão do tablet expirou. Reabra o aplicativo para tentar novamente.' : 'Não foi possível desparear agora. Verifique a conexão e tente novamente.';
+        const notice = root.querySelector('.kiosk-unlocked-notice');
+        if (notice) { notice.textContent = message; notice.classList.add('kiosk-unlocked-notice--error'); }
+        button.disabled = false;
+      }
+    };
     root.querySelector('.kiosk-reenter-button').onclick = async () => {
       try { await nativeRuntimePlugin()?.reenterKiosk?.(); } finally {
         kioskUnlocked = false;
@@ -431,21 +461,29 @@ export async function renderTablet(root) {
   }
 
   async function refreshConfig() {
-    if (kioskUnlocked) return;
     try {
       const config = await deviceRequest(`/api/devices/config?deviceId=${encodeURIComponent(id.deviceId)}&currentConfigVersion=${currentConfigVersion()}`, id);
       if (config.status === 'unpaired') {
+        const configVersion = Number(config.configVersion || 0);
+        if (configVersion && lastUnpairedConfigVersion === configVersion && (kioskUnlocked || root.querySelector('.pairing-card'))) return;
         activeSurvey = null;
+        localStorage.removeItem(KEYS.surveyCache);
+        if (configVersion) localStorage.setItem(KEYS.configVersion, String(configVersion));
+        localStorage.removeItem(KEYS.activation);
         ensureActivation(id);
         waitingForPairing = true;
         await register();
-        renderPairing();
+        lastUnpairedConfigVersion = configVersion;
+        if (kioskUnlocked) renderAdminUnlocked({ notice: 'Este tablet foi despareado pelo painel. Use o código abaixo para pareá-lo novamente.', showPairingCode: true });
+        else renderPairing();
         return;
       }
+      if (kioskUnlocked) return;
       if (waitingForPairing) {
         await configureAdminPin();
         waitingForPairing = false;
       }
+      lastUnpairedConfigVersion = 0;
       localStorage.removeItem(KEYS.activation);
       await flushPending();
       if (config.status === 'unchanged') {

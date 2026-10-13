@@ -249,6 +249,16 @@ test('integra autenticação, isolamento, pareamento, respostas e relatório', a
   assert.equal(crossPatch.response.status, 403);
   const crossSurvey = await api(`/api/surveys/${surveyA.id}`, { token: adminBToken });
   assert.equal(crossSurvey.response.status, 403);
+
+  const adminUnpair = await api(`/api/devices/${deviceA}/unpair`, { method: 'POST', token: adminAToken });
+  assert.equal(adminUnpair.response.status, 200, JSON.stringify(adminUnpair.body));
+  assert.equal(adminUnpair.body.status, 'unpaired');
+  const unpairedConfig = await api(`/api/devices/config?deviceId=${encodeURIComponent(deviceAId)}&currentConfigVersion=${adminUnpair.body.configVersion}`, { headers: { Authorization: `Bearer ${deviceASecret}` } });
+  assert.equal(unpairedConfig.response.status, 200, JSON.stringify(unpairedConfig.body));
+  assert.equal(unpairedConfig.body.status, 'unpaired');
+  const tabletUnpair = await api('/api/devices/self/unpair', { method: 'POST', headers: { Authorization: `Bearer ${deviceASecret}` }, body: JSON.stringify({ deviceId: deviceAId }) });
+  assert.equal(tabletUnpair.response.status, 200, JSON.stringify(tabletUnpair.body));
+  assert.equal(tabletUnpair.body.status, 'unpaired');
 });
 
 test('rate limit separa clientes encaminhados pelo proxy confiável', async () => {

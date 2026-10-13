@@ -56,3 +56,12 @@ test('native tablet has the QR-like two-finger admin exit flow', async () => {
   assert.match(runtimeSource, /admin_pin_invalid/);
   assert.match(runtimeSource, /runOnUiThread/);
 });
+
+test('tablet liberado permite desparear e mostra um novo código', () => {
+  assert.match(tabletSource, /\/api\/devices\/self\/unpair/);
+  assert.match(tabletSource, /Desparear tablet/);
+  assert.match(tabletSource, /Novo código de pareamento/);
+  assert.match(tabletSource, /lastUnpairedConfigVersion/);
+  assert.match(serverSource, /app\.post\('\/api\/devices\/self\/unpair', deviceAuth/);
+  assert.match(serverSource, /status: 'unpaired', deviceId: req\.device\.device_id/);
+});

@@ -765,19 +765,34 @@ app.post('/api/devices/:id/remove-survey', auth, asyncRoute(async (req, res) => 
   res.json({ ok: true });
 }));
 
+app.post('/api/devices/self/unpair', deviceAuth, asyncRoute(async (req, res) => {
+  const result = await pool.query(
+    `UPDATE devices
+        SET tenant_id=NULL,location_id=NULL,active_survey_id=NULL,activation_code=NULL,
+            activation_expires_at=NULL,paired_at=NULL,status='unknown',config_version=config_version+1,updated_at=now()
+      WHERE id=$1 AND active=true
+      RETURNING id,config_version`,
+    [req.device.id],
+  );
+  if (!result.rowCount) return res.status(404).json({ error: 'device_not_found' });
+  res.json({ ok: true, status: 'unpaired', deviceId: req.device.device_id, configVersion: result.rows[0].config_version });
+}));
+
 app.post('/api/devices/:id/unpair', auth, asyncRoute(async (req, res) => {
   if (!requireManager(req, res)) return;
   const deviceId = asPositiveInt(req.params.id);
   const device = await loadManagedDevice(req, res, deviceId);
   if (!device) return;
-  await pool.query(
+  const result = await pool.query(
     `UPDATE devices
         SET tenant_id=NULL,location_id=NULL,active_survey_id=NULL,activation_code=NULL,
             activation_expires_at=NULL,paired_at=NULL,status='unknown',config_version=config_version+1,updated_at=now()
-      WHERE id=$1`,
+      WHERE id=$1 AND tenant_id IS NOT NULL
+      RETURNING id,config_version`,
     [deviceId],
   );
-  res.json({ ok: true });
+  if (!result.rowCount) return res.status(409).json({ error: 'device_already_unpaired' });
+  res.json({ ok: true, status: 'unpaired', deviceId, configVersion: result.rows[0].config_version });
 }));
 
 app.delete('/api/devices/:id', auth, asyncRoute(async (req, res) => {
@@ -843,10 +858,10 @@ app.post('/api/devices/heartbeat', deviceAuth, asyncRoute(async (req, res) => {
 app.get('/api/devices/config', deviceAuth, asyncRoute(async (req, res) => {
   await pool.query("UPDATE devices SET status='online',last_seen_at=now(),updated_at=now() WHERE id=$1 AND active=true", [req.device.id]);
   const currentConfigVersion = asPositiveInt(req.query.currentConfigVersion);
+  if (!req.device.tenant_id) return res.json({ status: 'unpaired', deviceId: req.device.device_id, configVersion: req.device.config_version, survey: null });
   if (currentConfigVersion && currentConfigVersion === req.device.config_version) {
     return res.json({ status: 'unchanged', deviceId: req.device.device_id, configVersion: req.device.config_version });
   }
-  if (!req.device.tenant_id) return res.json({ status: 'unpaired', deviceId: req.device.device_id, configVersion: req.device.config_version, survey: null });
   if (!req.device.active_survey_id) {
     return res.json({ status: 'paired', deviceId: req.device.device_id, deviceName: req.device.name, configVersion: req.device.config_version, survey: null });
   }
