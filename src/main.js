@@ -4,6 +4,63 @@ import { renderTablet } from './tablet.js';
 
 const app = document.querySelector('#app');
 const nativeKiosk = Boolean(globalThis.Capacitor?.Plugins?.OpinaRuntime);
+const AUTH_TOKEN_KEY = 'opina_token';
+const DEFAULT_RATING_QUESTION = 'Como foi a sua experiência?';
+const DEFAULT_EMOJI_OPTIONS = [
+  { value: '1', emoji: '😡', label: 'Péssimo', animation: 'shake' },
+  { value: '2', emoji: '😕', label: 'Ruim', animation: 'float' },
+  { value: '3', emoji: '😐', label: 'Regular', animation: 'pulse' },
+  { value: '4', emoji: '🙂', label: 'Bom', animation: 'bounce' },
+  { value: '5', emoji: '😍', label: 'Ótimo', animation: 'heart' },
+];
+const EMOJI_ANIMATION_OPTIONS = [
+  { value: 'shake', label: 'Tremer' },
+  { value: 'float', label: 'Flutuar' },
+  { value: 'pulse', label: 'Pulsar' },
+  { value: 'bounce', label: 'Quicar' },
+  { value: 'heart', label: 'Brilhar' },
+];
+
+function normalizeEmojiOptions(options) {
+  return DEFAULT_EMOJI_OPTIONS.map((fallback, index) => {
+    const item = Array.isArray(options) ? options[index] : null;
+    return {
+      value: String(index + 1),
+      emoji: String(item?.emoji || (typeof item === 'string' ? item : fallback.emoji)).trim() || fallback.emoji,
+      label: String(item?.label || fallback.label).trim() || fallback.label,
+      animation: EMOJI_ANIMATION_OPTIONS.some((option) => option.value === item?.animation) ? item.animation : fallback.animation,
+    };
+  });
+}
+
+function readEmojiOptions(source, prefix = 'rating') {
+  const get = (name) => typeof source?.get === 'function' ? source.get(name) : source?.[name];
+  return DEFAULT_EMOJI_OPTIONS.map((fallback, index) => ({
+    value: String(index + 1),
+    emoji: String(get(`${prefix}-emoji-${index}`) || fallback.emoji).trim() || fallback.emoji,
+    label: String(get(`${prefix}-label-${index}`) || fallback.label).trim() || fallback.label,
+    animation: EMOJI_ANIMATION_OPTIONS.some((option) => option.value === get(`${prefix}-animation-${index}`)) ? get(`${prefix}-animation-${index}`) : fallback.animation,
+  }));
+}
+
+function renderEmojiCustomizationFields(options = DEFAULT_EMOJI_OPTIONS, prefix = 'rating', legend = 'Personalizar carinhas animadas') {
+  const normalized = normalizeEmojiOptions(options);
+  return `<fieldset class="emoji-customizer emoji-config-field"><legend>${escapeHtml(legend)}</legend><p class="emoji-customizer__hint">Escolha o emoji, o nome e o movimento de cada nota.</p><div class="emoji-customizer__grid">${normalized.map((item, index) => `<div class="emoji-customizer__row"><span class="emoji-customizer__score">${index + 1}</span><input name="${prefix}-emoji-${index}" value="${escapeHtml(item.emoji)}" maxlength="8" aria-label="Emoji da nota ${index + 1}"><input name="${prefix}-label-${index}" value="${escapeHtml(item.label)}" maxlength="40" aria-label="Rótulo da nota ${index + 1}"><select name="${prefix}-animation-${index}" aria-label="Animação da nota ${index + 1}">${EMOJI_ANIMATION_OPTIONS.map((animation) => `<option value="${animation.value}" ${animation.value === item.animation ? 'selected' : ''}>${animation.label}</option>`).join('')}</select></div>`).join('')}</div></fieldset>`;
+}
+
+function authToken() {
+  return sessionStorage.getItem(AUTH_TOKEN_KEY) || localStorage.getItem(AUTH_TOKEN_KEY);
+}
+
+function saveAuthToken(token) {
+  sessionStorage.setItem(AUTH_TOKEN_KEY, token);
+  localStorage.removeItem(AUTH_TOKEN_KEY);
+}
+
+function clearAuthToken() {
+  sessionStorage.removeItem(AUTH_TOKEN_KEY);
+  localStorage.removeItem(AUTH_TOKEN_KEY);
+}
 
 if (nativeKiosk) {
   renderTablet(app).catch((error) => {
@@ -27,21 +84,22 @@ function escapeHtml(value) {
 
 function dashboardIcon(name) {
   const paths = {
-    spark: '<path d="m12 3 1.7 5.3L19 10l-5.3 1.7L12 17l-1.7-5.3L5 10l5.3-1.7L12 3Z"/><path d="m19 16 .8 2.2L22 19l-2.2.8L19 22l-.8-2.2L16 19l2.2-.8L19 16Z"/>',
+    spark: '<path d="m12 3.5 2.45 5.7 6.05 2.4-6.05 2.4L12 19.8 9.55 14 3.5 11.6l6.05-2.4L12 3.5Z" fill="currentColor" stroke="currentColor" stroke-linejoin="round"/><path d="m19.2 16.6.7 1.8 1.8.7-1.8.7-.7 1.8-.7-1.8-1.8-.7 1.8-.7.7-1.8Z" fill="currentColor" stroke="currentColor" stroke-linejoin="round"/>',
     home: '<path d="m3 10 9-7 9 7v10a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1V10Z"/>',
-    settings: '<path d="M12 8.5a3.5 3.5 0 1 0 0 7 3.5 3.5 0 0 0 0-7Z"/><path d="m19.4 15 .1.1a1.7 1.7 0 0 1-2.4 2.4l-.1-.1a1.7 1.7 0 0 0-2.9 1.2v.2a1.7 1.7 0 0 1-3.4 0v-.2a1.7 1.7 0 0 0-2.9-1.2l-.1.1a1.7 1.7 0 1 1-2.4-2.4l.1-.1a1.7 1.7 0 0 0-1.2-2.9h-.2a1.7 1.7 0 0 1 0-3.4h.2a1.7 1.7 0 0 0 1.2-2.9l-.1-.1a1.7 1.7 0 1 1 2.4-2.4l.1.1A1.7 1.7 0 0 0 10.7 2h.2a1.7 1.7 0 0 1 3.4 0v.2a1.7 1.7 0 0 0 2.9 1.2l.1-.1a1.7 1.7 0 1 1 2.4 2.4l-.1.1a1.7 1.7 0 0 0 1.2 2.9h.2a1.7 1.7 0 0 1 0 3.4h-.2a1.7 1.7 0 0 0-1.4 2.9Z"/>',
     tablet: '<rect x="6" y="2.5" width="12" height="19" rx="2"/><path d="M10 5h4M11 18.5h2"/>',
     survey: '<path d="M5 3.5h14a1 1 0 0 1 1 1v15a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1v-15a1 1 0 0 1 1-1Z"/><path d="M8 8h8M8 12h8M8 16h5"/>',
     chart: '<path d="M4 19V5M4 19h16"/><path d="M8 16v-5M12 16V7M16 16v-8"/>',
-    heart: '<path d="M20.8 8.7c0 5.3-8.8 10.1-8.8 10.1S3.2 14 3.2 8.7A4.7 4.7 0 0 1 12 6.2a4.7 4.7 0 0 1 8.8 2.5Z"/>',
-    star: '<path d="m12 3 2.8 5.7 6.2.9-4.5 4.4 1.1 6.2-5.6-2.9-5.6 2.9 1.1-6.2L3 9.6l6.2-.9L12 3Z"/>',
-    alert: '<path d="M12 4 21 20H3L12 4Z"/><path d="M12 9v5M12 17h.01"/>',
+    printer: '<path d="M6 9V3h12v6M6 17H4a2 2 0 0 1-2-2v-4a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v4a2 2 0 0 1-2 2h-2"/><path d="M6 14h12v7H6z"/><path d="M18 12h.01"/>',
+    evaluations: '<rect x="5" y="4.5" width="14" height="17" rx="2.5"/><path d="M9 4.5v-1h6v1M8.5 10h2M13 10h2.5M8.5 14h2M13 14h2.5M8.5 18h7"/>',
+    satisfaction: '<circle cx="12" cy="12" r="9"/><path d="M9 10h.01M15 10h.01M8.5 14.5c.9 1.3 2.1 2 3.5 2s2.6-.7 3.5-2"/>',
+    rating: '<path d="m12 3.5 2.6 5.3 5.9.9-4.2 4.1 1 5.8L12 16.8l-5.3 2.8 1-5.8-4.2-4.1 5.9-.9L12 3.5Z" fill="currentColor" stroke="currentColor"/>',
+    dissatisfaction: '<circle cx="12" cy="12" r="9"/><path d="M9 10h.01M15 10h.01M8.5 16c.9-1.4 2.1-2 3.5-2s2.6.6 3.5 2"/>',
   };
   return `<svg class="dashboard-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${paths[name] || paths.spark}</svg>`;
 }
 
 async function api(path, options = {}) {
-  const token = localStorage.getItem('opina_token');
+  const token = authToken();
   const response = await fetch(path, {
     ...options,
     headers: {
@@ -55,7 +113,73 @@ async function api(path, options = {}) {
   return data;
 }
 
+function openDialog({ title, description = '', fields = [], submitLabel = 'Salvar', destructive = false }) {
+  const dialog = document.createElement('dialog');
+  dialog.className = 'app-dialog';
+  const renderField = (field) => field.type === 'emoji-config'
+    ? renderEmojiCustomizationFields(field.value, field.name, field.label || 'Personalizar carinhas animadas')
+    : field.type === 'select'
+      ? `<label>${escapeHtml(field.label)}<select name="${escapeHtml(field.name)}" required>${field.options.map((option) => `<option value="${escapeHtml(option.value)}" ${String(option.value) === String(field.value) ? 'selected' : ''}>${escapeHtml(option.label)}</option>`).join('')}</select></label>`
+      : `<label>${escapeHtml(field.label)}<input name="${escapeHtml(field.name)}" type="${field.type || 'text'}" value="${escapeHtml(field.value || '')}" ${field.required === false ? '' : 'required'}></label>`;
+  dialog.innerHTML = `<form method="dialog" class="app-dialog__form"><div class="app-dialog__header"><div><p class="section-kicker">OPINA AI</p><h2>${escapeHtml(title)}</h2>${description ? `<p>${escapeHtml(description)}</p>` : ''}</div><button type="button" class="app-dialog__close" aria-label="Fechar">×</button></div><div class="app-dialog__fields">${fields.map(renderField).join('')}</div><div class="app-dialog__actions"><button type="button" class="outline-button app-dialog__cancel">Cancelar</button><button type="submit" class="submit-button compact ${destructive ? 'danger-button' : ''}">${escapeHtml(submitLabel)}</button></div></form>`;
+  document.body.appendChild(dialog);
+  const dialogType = dialog.querySelector('select[name="type"]');
+  const dialogEmojiConfig = dialog.querySelector('.emoji-config-field');
+  const dialogOptionsField = dialog.querySelector('input[name="options"]')?.closest('label');
+  const syncDialogFields = () => {
+    if (!dialogType) return;
+    dialogEmojiConfig?.classList.toggle('is-hidden', dialogType.value !== 'emoji');
+    dialogOptionsField?.classList.toggle('is-hidden', dialogType.value !== 'options');
+  };
+  dialogType?.addEventListener('change', syncDialogFields);
+  syncDialogFields();
+  return new Promise((resolve) => {
+    let settled = false;
+    const finish = (value) => {
+      if (settled) return;
+      settled = true;
+      dialog.close();
+      dialog.remove();
+      resolve(value);
+    };
+    dialog.querySelector('.app-dialog__close').onclick = () => finish(null);
+    dialog.querySelector('.app-dialog__cancel').onclick = () => finish(null);
+    dialog.addEventListener('cancel', (event) => { event.preventDefault(); finish(null); }, { once: true });
+    dialog.querySelector('form').onsubmit = (event) => {
+      event.preventDefault();
+      finish(Object.fromEntries(new FormData(event.currentTarget)));
+    };
+    dialog.showModal();
+  });
+}
+
+async function confirmAction(title, description) {
+  const result = await openDialog({ title, description, submitLabel: 'Confirmar', destructive: true, fields: [] });
+  return result !== null;
+}
+
 function renderAdmin(root) {
+  document.body.classList.remove('dashboard-mode');
+  const token = localStorage.getItem('opina_token');
+  if (token) {
+    root.innerHTML = `<main class="session-restore" role="status" aria-live="polite"><span class="session-restore__mark" aria-hidden="true">${dashboardIcon('spark')}</span><span>Carregando seu painel...</span></main>`;
+    api('/api/me').then((user) => {
+      renderDashboard(root, user).catch(() => renderSessionError(root));
+    }, () => {
+      localStorage.removeItem('opina_token');
+      renderLogin(root);
+    });
+    return;
+  }
+  renderLogin(root);
+}
+
+function renderSessionError(root) {
+  root.innerHTML = `<main class="session-restore" role="alert"><span class="session-restore__mark" aria-hidden="true">${dashboardIcon('spark')}</span><span>Não foi possível carregar o painel.</span><button id="retry-session" class="session-restore__retry" type="button">Tentar novamente</button></main>`;
+  root.querySelector('#retry-session').addEventListener('click', () => renderAdmin(root));
+}
+
+function renderLogin(root) {
   document.body.classList.remove('dashboard-mode');
   root.innerHTML = `
     <section class="login-shell" aria-label="Acesso administrativo Opina AI">
@@ -65,13 +189,7 @@ function renderAdmin(root) {
           <p class="eyebrow">PESQUISA DE SATISFAÇÃO DIGITAL</p>
           <h1>Pesquisas de<br><span>satisfação</span></h1>
           <p class="intro">Colete opiniões no tablet e acompanhe a experiência em tempo real.</p>
-          <div class="feedback-visual" aria-label="Cartão ilustrativo de opiniões">
-            <div class="feedback-visual__glow"></div>
-            <div class="feedback-card">
-              <div class="feedback-card__brand"><span class="sparkle-icon" aria-hidden="true">✦</span><strong>Opina <em>AI</em></strong></div>
-              <div class="faces" aria-hidden="true"><img class="faces-reference" src="/assets/faces-reference.png" alt=""></div>
-            </div>
-          </div>
+          <img class="feedback-visual" src="/assets/opinaai-satisfaction-illustration.png" alt="Cartão Opina AI com rostos que representam níveis de satisfação">
           <p class="tagline">Tablet, pesquisa e resultado. Sem distrações.</p>
         </div>
       </div>
@@ -86,7 +204,12 @@ function renderAdmin(root) {
             <label for="password">Senha</label>
             <div class="password-field">
               <input id="password" name="password" type="password" placeholder="Digite sua senha" autocomplete="current-password" required>
-              <button id="toggle-password" class="icon-button" type="button" aria-label="Mostrar senha" title="Mostrar senha">◉</button>
+              <button id="toggle-password" class="icon-button" type="button" aria-label="Mostrar senha" title="Mostrar senha" aria-pressed="false">
+                <svg class="password-visibility-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  <path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7-10-7-10-7Z"></path>
+                  <circle cx="12" cy="12" r="3"></circle>
+                </svg>
+              </button>
             </div>
             <button class="submit-button" type="submit">Entrar</button>
             <p id="form-message" class="form-message" role="status" aria-live="polite"></p>
@@ -103,8 +226,20 @@ function renderAdmin(root) {
   togglePassword.addEventListener('click', () => {
     const isHidden = passwordInput.type === 'password';
     passwordInput.type = isHidden ? 'text' : 'password';
-    togglePassword.textContent = isHidden ? '◉' : '◌';
     togglePassword.setAttribute('aria-label', isHidden ? 'Ocultar senha' : 'Mostrar senha');
+    togglePassword.setAttribute('title', isHidden ? 'Ocultar senha' : 'Mostrar senha');
+    togglePassword.setAttribute('aria-pressed', String(isHidden));
+    togglePassword.innerHTML = isHidden
+      ? `<svg class="password-visibility-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <path d="M3 3l18 18"></path>
+          <path d="M10.6 10.6a2 2 0 0 0 2.8 2.8"></path>
+          <path d="M9.9 5.2A10.8 10.8 0 0 1 12 5c6.4 0 10 7 10 7a15.8 15.8 0 0 1-3.1 3.9"></path>
+          <path d="M6.2 6.2C3.5 8 2 12 2 12s3.6 7 10 7c1.1 0 2.1-.2 3-.5"></path>
+        </svg>`
+      : `<svg class="password-visibility-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7-10-7-10-7Z"></path>
+          <circle cx="12" cy="12" r="3"></circle>
+        </svg>`;
   });
 
   loginForm.addEventListener('submit', async (event) => {
@@ -116,21 +251,20 @@ function renderAdmin(root) {
         method: 'POST',
         body: JSON.stringify({ email: root.querySelector('#email').value, password: passwordInput.value }),
       });
-      localStorage.setItem('opina_token', data.token);
+      saveAuthToken(data.token);
       await renderDashboard(root, data.user);
     } catch (error) {
       formMessage.textContent = error.message;
     }
   });
 
-  const token = localStorage.getItem('opina_token');
+  const token = authToken();
   if (token) {
-    api('/api/me').then((user) => renderDashboard(root, user)).catch(() => localStorage.removeItem('opina_token'));
+    api('/api/me').then((user) => renderDashboard(root, user)).catch(() => clearAuthToken());
   }
 }
 
 async function renderDashboard(root, user) {
-  document.body.classList.add('dashboard-mode');
   let selectedTenantId = user.tenantId || '';
   let tenants = [];
   if (user.role === 'SUPERADMIN') tenants = await api('/api/tenants');
@@ -138,6 +272,7 @@ async function renderDashboard(root, user) {
 
   const tenantOptions = () => tenants.map((tenant) => `<option value="${tenant.id}" ${String(tenant.id) === String(selectedTenantId) ? 'selected' : ''}>${escapeHtml(tenant.name)}</option>`).join('');
 
+  document.body.classList.add('dashboard-mode');
   root.innerHTML = `
     <main class="dashboard dashboard-shell">
       <aside class="dashboard-sidebar">
@@ -145,17 +280,16 @@ async function renderDashboard(root, user) {
         <p class="sidebar-label">NAVEGAÇÃO</p>
         <nav class="dashboard-nav" aria-label="Navegação do painel">
           <a class="dashboard-nav__item is-active" data-view="overview" href="#overview"><span aria-hidden="true">${dashboardIcon('home')}</span> Visão geral</a>
-          <a class="dashboard-nav__item" data-view="operations" href="#operations"><span aria-hidden="true">${dashboardIcon('settings')}</span> Configuração</a>
           <a class="dashboard-nav__item" data-view="tablets" href="#tablets"><span aria-hidden="true">${dashboardIcon('tablet')}</span> Tablets</a>
           <a class="dashboard-nav__item" data-view="surveys" href="#surveys"><span aria-hidden="true">${dashboardIcon('survey')}</span> Pesquisas</a>
           <a class="dashboard-nav__item" data-view="reports" href="#reports"><span aria-hidden="true">${dashboardIcon('chart')}</span> Relatórios</a>
         </nav>
-        <div class="sidebar-profile"><span class="profile-avatar">${escapeHtml(String(user.name || 'A').slice(0, 1).toUpperCase())}</span><div><strong>${escapeHtml(user.name)}</strong><span>Administrador</span></div></div>
+        <div class="sidebar-profile"><span class="profile-avatar">${escapeHtml(String(user.name || 'A').slice(0, 1).toUpperCase())}</span><div><strong>${escapeHtml(user.name)}</strong><span>${user.role === 'SUPERADMIN' ? 'Superadministrador' : 'Administrador'}</span></div></div>
       </aside>
       <section class="dashboard-content">
         <header class="dashboard-topbar">
           <div class="mobile-brand"><span class="brand-symbol" aria-hidden="true">${dashboardIcon('spark')}</span><strong>Opina <em>AI</em></strong></div>
-          <div class="topbar-actions"><a class="primary-button" href="/tablet" target="_blank">Abrir tablet de teste <span aria-hidden="true">↗</span></a><button id="logout" class="topbar-logout" type="button">Sair</button></div>
+          <div class="topbar-actions"><span id="dashboard-status" class="sync-status" role="status" aria-live="polite"><i></i>Atualizado</span><a class="primary-button" href="/tablet" target="_blank">Abrir tablet de teste <span aria-hidden="true">↗</span></a><button id="change-password" class="topbar-account" type="button">Minha senha</button><button id="logout" class="topbar-logout" type="button">Sair</button></div>
         </header>
         <section id="overview" class="dashboard-page-header">
           <div><p class="section-kicker">PAINEL</p><h1 id="page-title">Visão geral</h1><p id="page-subtitle" class="page-subtitle">Acompanhe as avaliações e a operação dos tablets.</p></div>
@@ -165,25 +299,25 @@ async function renderDashboard(root, user) {
           <div class="section-heading"><div><h2>Resumo</h2></div><span class="section-counter">Período atual</span></div>
           <div id="report-metrics" class="metric-grid overview-metrics"></div>
         </section>
-        <section id="operations" class="dashboard-section" data-dashboard-view="operations">
-          <div class="section-heading"><div><p class="section-kicker">CONFIGURAÇÃO</p><h2>Configurar operação</h2></div></div>
-          <div class="dashboard-grid action-grid">
-            <article class="dashboard-card action-card action-card--survey"><div class="action-card__icon" aria-hidden="true">${dashboardIcon('survey')}</div><div class="action-card__intro"><h3>Nova pesquisa</h3><p>Crie a pergunta exibida no tablet.</p></div><form id="survey-form" class="form-stack"><div class="form-grid"><label>Título da pesquisa<input name="title" required placeholder="Ex.: Experiência de atendimento"></label><label>Pergunta para o cliente<input name="question" required placeholder="Como você avalia sua experiência?"></label></div><label>Tipo de resposta<select name="type"><option value="emoji">Carinhas de satisfação</option><option value="stars">Estrelas (1 a 5)</option><option value="scale">Nota de 1 a 10</option><option value="options">Opções personalizadas</option></select></label><label class="options-field is-hidden">Opções separadas por vírgula<input class="options-field is-hidden" name="options" placeholder="Ótimo, Bom, Regular, Ruim"></label><div class="form-submit-row"><button class="submit-button compact" type="submit">Cadastrar pesquisa <span aria-hidden="true">→</span></button><p class="inline-message" id="survey-message" role="status"></p></div></form></article>
-            <article class="dashboard-card action-card action-card--pair"><div class="action-card__icon" aria-hidden="true">${dashboardIcon('tablet')}</div><div class="action-card__intro"><h3>Parear tablet</h3><p>Conecte um dispositivo à operação.</p></div><form id="pair-form" class="form-stack"><label>Código exibido no tablet<input name="activationCode" inputmode="numeric" maxlength="6" pattern="[0-9]{6}" required placeholder="Ex.: 482913"></label><div class="form-grid"><label>Nome do tablet<input name="deviceName" placeholder="Tablet Recepção"></label><label>Unidade / local<input name="locationName" value="Recepção" required></label></div><div class="form-submit-row"><button class="submit-button compact" type="submit">Parear dispositivo <span aria-hidden="true">→</span></button><p class="inline-message" id="pair-message" role="status"></p></div></form></article>
-          </div>
+        ${user.role === 'SUPERADMIN' ? `<section id="companies" class="dashboard-section admin-tools" data-dashboard-view="overview"><details class="admin-details"><summary><span><small>ADMINISTRAÇÃO</small><strong>Gerenciar empresas</strong></span><b>Adicionar empresa <span aria-hidden="true">＋</span></b></summary><article class="dashboard-card"><form id="tenant-form" class="form-grid form-grid--tenant"><label>Nome da empresa<input name="name" required></label><label>E-mail do administrador<input name="email" type="email" required></label><label>Senha inicial<input name="password" type="password" minlength="8" required></label><div class="form-submit-row"><button class="submit-button compact" type="submit">Criar empresa <span aria-hidden="true">→</span></button><p class="inline-message" id="tenant-message" role="status"></p></div></form></article></details></section>` : ''}
+        <section id="tablets" class="dashboard-section" data-dashboard-view="tablets">
+          <div class="section-heading"><div><p class="section-kicker">OPERAÇÃO</p><h2>Tablets</h2></div><span id="device-count" class="section-counter">Carregando...</span></div>
+          <article class="dashboard-card action-card action-card--pair"><div class="action-card__icon" aria-hidden="true">${dashboardIcon('tablet')}</div><div class="action-card__intro"><h3>Parear tablet</h3><p>Conecte um dispositivo à operação.</p></div><form id="pair-form" class="form-stack"><label>Código exibido no tablet<input name="activationCode" inputmode="numeric" maxlength="6" pattern="[0-9]{6}" required placeholder="Ex.: 482913"></label><div class="form-grid"><label>Nome do tablet<input name="deviceName" placeholder="Tablet Recepção"></label><label>Unidade / local<input name="locationName" value="Recepção" required></label></div><div class="form-submit-row"><button class="submit-button compact" type="submit">Parear dispositivo <span aria-hidden="true">→</span></button><p class="inline-message" id="pair-message" role="status"></p></div></form></article>
+          <div class="dashboard-card dashboard-card--flush"><div id="device-list" class="device-list">Carregando...</div></div>
         </section>
-        ${user.role === 'SUPERADMIN' ? `<section id="companies" class="dashboard-section admin-tools" data-dashboard-view="operations"><details class="admin-details"><summary><span><small>ADMINISTRAÇÃO</small><strong>Gerenciar empresas</strong></span><b>Adicionar empresa <span aria-hidden="true">＋</span></b></summary><article class="dashboard-card"><form id="tenant-form" class="form-grid form-grid--tenant"><label>Nome da empresa<input name="name" required></label><label>E-mail do administrador<input name="email" type="email" required></label><label>Senha inicial<input name="password" type="password" minlength="8" required></label><div class="form-submit-row"><button class="submit-button compact" type="submit">Criar empresa <span aria-hidden="true">→</span></button><p class="inline-message" id="tenant-message" role="status"></p></div></form></article></details></section>` : ''}
-        <section id="tablets" class="dashboard-section" data-dashboard-view="tablets"><div class="section-heading"><div><p class="section-kicker">OPERAÇÃO</p><h2>Tablets</h2></div><div class="section-heading__action"><span id="device-count" class="section-counter">Carregando...</span><a data-view="operations" href="#operations" class="text-link">+ Parear tablet</a></div></div><div class="dashboard-card dashboard-card--flush"><div id="device-list" class="device-list">Carregando...</div></div></section>
-        <section id="surveys" class="dashboard-section" data-dashboard-view="surveys"><div class="section-heading"><div><p class="section-kicker">CONTEÚDO</p><h2>Pesquisas</h2></div></div><div class="dashboard-card"><div id="survey-list" class="survey-list">Carregando...</div></div></section>
-        <section id="reports" class="dashboard-section report-section" data-dashboard-view="reports"><div class="section-heading"><div><p class="section-kicker">RESULTADOS</p><h2>Relatórios</h2></div><span id="report-total" class="section-counter">Carregando...</span></div><div class="dashboard-card report-card"><div class="report-toolbar"><div class="date-row"><label>De <input id="from" type="date"></label><label>Até <input id="to" type="date"></label></div><div class="report-filters"><label>Pesquisa<select id="report-survey"><option value="">Todas</option></select></label><label>Unidade<select id="report-location"><option value="">Todas</option></select></label><label>Tablet<select id="report-device"><option value="">Todos</option></select></label></div><button id="load-report" class="outline-button" type="button">Atualizar <span aria-hidden="true">↻</span></button></div><div class="report-results"><div class="report-results__header"><h3>Distribuição</h3><span>Respostas por avaliação</span></div><div id="report-distribution" class="distribution-list"></div><div id="report-list" class="report-list"></div></div></div></section>
+        <section id="surveys" class="dashboard-section" data-dashboard-view="surveys">
+          <div class="section-heading"><div><p class="section-kicker">CONTEÚDO</p><h2>Pesquisas</h2></div></div>
+          <article class="dashboard-card action-card action-card--survey"><div class="action-card__icon" aria-hidden="true">${dashboardIcon('survey')}</div><div class="action-card__intro"><h3>Nova pesquisa</h3><p>Crie a pergunta exibida no tablet.</p></div><form id="survey-form" class="form-stack"><div class="form-grid"><label>Título da pesquisa<input name="title" required placeholder="Ex.: Experiência de atendimento"></label><label>Pergunta para o cliente<input name="question" required value="${DEFAULT_RATING_QUESTION}" placeholder="Digite a pergunta exibida no tablet"></label></div><label>Tipo de resposta<select name="type"><option value="emoji">Carinhas animadas</option><option value="stars">Estrelas (1 a 5)</option><option value="scale">Nota de 1 a 10</option><option value="options">Opções personalizadas</option></select></label>${renderEmojiCustomizationFields()}<label class="options-field is-hidden">Opções separadas por vírgula<input class="options-field is-hidden" name="options" placeholder="Ótimo, Bom, Regular, Ruim"></label><div class="form-submit-row"><button class="submit-button compact" type="submit">Cadastrar pesquisa <span aria-hidden="true">→</span></button><p class="inline-message" id="survey-message" role="status"></p></div></form></article>
+          <div class="dashboard-card"><div id="survey-list" class="survey-list">Carregando...</div></div>
+        </section>
+        <section id="reports" class="dashboard-section report-section" data-dashboard-view="reports"><div class="section-heading"><div><p class="section-kicker">RESULTADOS</p><h2>Relatórios</h2></div><div class="section-heading__action"><span id="report-total" class="section-counter">Carregando...</span><button id="print-report" class="outline-button report-print-button" type="button"><span aria-hidden="true">${dashboardIcon('printer')}</span>Imprimir relatório</button></div></div><p id="report-print-context" class="report-print-context"></p><div class="dashboard-card report-card"><div class="report-toolbar"><div class="date-row"><label>De <input id="from" type="date"></label><label>Até <input id="to" type="date"></label></div><div class="report-filters"><label>Pesquisa<select id="report-survey"><option value="">Todas</option></select></label><label>Unidade<select id="report-location"><option value="">Todas</option></select></label><label>Tablet<select id="report-device"><option value="">Todos</option></select></label></div><button id="load-report" class="outline-button" type="button">Atualizar <span aria-hidden="true">↻</span></button></div><div class="report-results"><div class="report-results__header"><h3>Distribuição</h3><span>Respostas por avaliação</span></div><div id="report-distribution" class="distribution-list"></div><div id="report-list" class="report-list"></div></div></div></section>
       </section>
     </main>`;
 
   const viewMeta = {
     overview: ['Visão geral', 'Acompanhe as avaliações e a operação dos tablets.'],
-    operations: ['Configuração', 'Crie pesquisas e conecte os tablets.'],
-    tablets: ['Tablets', 'Acompanhe o status e a pesquisa de cada dispositivo.'],
-    surveys: ['Pesquisas', 'Gerencie as perguntas exibidas nos tablets.'],
+    tablets: ['Tablets', 'Pareie dispositivos e acompanhe suas pesquisas.'],
+    surveys: ['Pesquisas', 'Crie e gerencie as perguntas exibidas nos tablets.'],
     reports: ['Relatórios', 'Leia os resultados da experiência dos clientes.'],
   };
   const showDashboardView = (view, updateHash = true) => {
@@ -201,7 +335,34 @@ async function renderDashboard(root, user) {
   window.onhashchange = () => showDashboardView(location.hash.slice(1), false);
   showDashboardView(location.hash.slice(1), false);
 
-  root.querySelector('#logout').onclick = () => { localStorage.removeItem('opina_token'); location.reload(); };
+  root.querySelector('#logout').onclick = () => { clearAuthToken(); location.reload(); };
+  root.querySelector('#change-password').onclick = async () => {
+    const values = await openDialog({
+      title: 'Trocar senha',
+      description: 'Use uma senha com pelo menos 12 caracteres.',
+      fields: [
+        { name: 'currentPassword', label: 'Senha atual', type: 'password' },
+        { name: 'newPassword', label: 'Nova senha', type: 'password' },
+        { name: 'confirmPassword', label: 'Confirmar nova senha', type: 'password' },
+      ],
+      submitLabel: 'Atualizar senha',
+    });
+    if (!values) return;
+    const status = root.querySelector('#dashboard-status');
+    if (values.newPassword !== values.confirmPassword) {
+      status.innerHTML = '<i></i>As senhas não conferem';
+      status.classList.add('sync-status--error');
+      return;
+    }
+    try {
+      await api('/api/auth/change-password', { method: 'POST', body: JSON.stringify(values) });
+      status.innerHTML = '<i></i>Senha atualizada';
+      status.classList.remove('sync-status--error');
+    } catch (error) {
+      status.innerHTML = `<i></i>${escapeHtml(error.message)}`;
+      status.classList.add('sync-status--error');
+    }
+  };
 
   if (user.role === 'SUPERADMIN') {
     root.querySelector('#tenant-filter').onchange = async (event) => {
@@ -212,43 +373,55 @@ async function renderDashboard(root, user) {
       event.preventDefault();
       const form = new FormData(event.target);
       const message = root.querySelector('#tenant-message');
+      const submitButton = event.target.querySelector('button[type="submit"]');
+      submitButton.disabled = true;
       try {
         const created = await api('/api/tenants', { method: 'POST', body: JSON.stringify(Object.fromEntries(form)) });
         message.textContent = 'Empresa criada.';
         tenants = await api('/api/tenants');
         selectedTenantId = created.tenant.id;
         await renderDashboard(root, user);
-      } catch (error) { message.textContent = error.message; }
+      } catch (error) { message.textContent = error.message; } finally { submitButton.disabled = false; }
     };
   }
 
   const typeSelect = root.querySelector('#survey-form [name=type]');
-  const toggleOptions = () => root.querySelectorAll('.options-field').forEach((node) => node.classList.toggle('is-hidden', typeSelect.value !== 'options'));
-  typeSelect.onchange = toggleOptions;
-  toggleOptions();
+  const toggleSurveyFields = () => {
+    root.querySelectorAll('.options-field').forEach((node) => node.classList.toggle('is-hidden', typeSelect.value !== 'options'));
+    root.querySelectorAll('.emoji-config-field').forEach((node) => node.classList.toggle('is-hidden', typeSelect.value !== 'emoji'));
+  };
+  typeSelect.onchange = toggleSurveyFields;
+  toggleSurveyFields();
 
   root.querySelector('#survey-form').onsubmit = async (event) => {
     event.preventDefault();
     const form = new FormData(event.target);
-    const options = String(form.get('options') || '').split(',').map((item) => item.trim()).filter(Boolean);
+    const type = String(form.get('type') || 'emoji');
+    const options = type === 'emoji'
+      ? readEmojiOptions(form, 'rating')
+      : String(form.get('options') || '').split(',').map((item) => item.trim()).filter(Boolean);
     const payload = {
       tenantId: selectedTenantId || undefined,
       title: form.get('title'),
       description: form.get('question'),
-      questions: [{ text: form.get('question'), type: form.get('type'), options }],
+      questions: [{ text: form.get('question'), type, options }],
     };
     const message = root.querySelector('#survey-message');
+    const submitButton = event.target.querySelector('button[type="submit"]');
+    submitButton.disabled = true;
     try {
       await api('/api/surveys', { method: 'POST', body: JSON.stringify(payload) });
       message.textContent = 'Pesquisa cadastrada. Agora associe-a a um tablet.';
-      event.target.reset(); toggleOptions(); await loadDashboardData();
-    } catch (error) { message.textContent = error.message; }
+      event.target.reset(); toggleSurveyFields(); await loadDashboardData();
+    } catch (error) { message.textContent = error.message; } finally { submitButton.disabled = false; }
   };
 
   root.querySelector('#pair-form').onsubmit = async (event) => {
     event.preventDefault();
     const form = new FormData(event.target);
     const message = root.querySelector('#pair-message');
+    const submitButton = event.target.querySelector('button[type="submit"]');
+    submitButton.disabled = true;
     try {
       await api('/api/devices/pair', {
         method: 'POST',
@@ -257,12 +430,40 @@ async function renderDashboard(root, user) {
       message.textContent = 'Tablet pareado com sucesso.';
       event.target.reset(); event.target.querySelector('[name=locationName]').value = 'Recepção';
       await loadDashboardData();
-    } catch (error) { message.textContent = error.message; }
+    } catch (error) { message.textContent = error.message; } finally { submitButton.disabled = false; }
   };
 
   root.querySelector('#load-report').onclick = loadDashboardData;
+  const printReportButton = root.querySelector('#print-report');
+  printReportButton.onclick = async () => {
+    printReportButton.disabled = true;
+    try {
+      await loadDashboardData();
+      window.print();
+    } finally {
+      printReportButton.disabled = false;
+    }
+  };
 
   async function loadDashboardData() {
+    const status = root.querySelector('#dashboard-status');
+    try {
+      await loadDashboardDataUnsafe();
+      if (status) {
+        status.innerHTML = '<i></i>Atualizado agora';
+        status.classList.remove('sync-status--error');
+      }
+    } catch (error) {
+      if (status) {
+        status.innerHTML = '<i></i>Falha ao atualizar';
+        status.classList.add('sync-status--error');
+      }
+      const visibleMessage = root.querySelector('.inline-message');
+      if (visibleMessage) visibleMessage.textContent = error.message;
+    }
+  }
+
+  async function loadDashboardDataUnsafe() {
     const suffix = selectedTenantId ? `?tenantId=${encodeURIComponent(selectedTenantId)}` : '';
     const reportParams = new URLSearchParams();
     if (selectedTenantId) reportParams.set('tenantId', selectedTenantId);
@@ -311,12 +512,28 @@ async function renderDashboard(root, user) {
       select.innerHTML = reportFilterOptions[id];
       if (selectedReportFilters[id]) select.value = selectedReportFilters[id];
     }
+    const formatReportDate = (value) => value ? value.split('-').reverse().join('/') : '';
+    const fromDate = root.querySelector('#from').value;
+    const toDate = root.querySelector('#to').value;
+    const periodLabel = fromDate && toDate
+      ? `${formatReportDate(fromDate)} a ${formatReportDate(toDate)}`
+      : fromDate ? `Desde ${formatReportDate(fromDate)}`
+        : toDate ? `Até ${formatReportDate(toDate)}` : 'Todo o período';
+    const printContext = [
+      `Período: ${periodLabel}`,
+      `Pesquisa: ${root.querySelector('#report-survey').selectedOptions[0]?.textContent.trim() || 'Todas'}`,
+      `Unidade: ${root.querySelector('#report-location').selectedOptions[0]?.textContent.trim() || 'Todas'}`,
+      `Tablet: ${root.querySelector('#report-device').selectedOptions[0]?.textContent.trim() || 'Todos'}`,
+    ];
+    const tenantName = root.querySelector('#tenant-filter')?.selectedOptions[0]?.textContent.trim();
+    if (tenantName) printContext.unshift(`Empresa: ${tenantName}`);
+    root.querySelector('#report-print-context').textContent = printContext.join(' · ');
     const report = reports?.metrics ? reports : { metrics: { total: 0, averageScore: null, satisfiedRate: 0, neutralRate: 0, dissatisfiedRate: 0 }, distribution: [], rows: [] };
     const metrics = report.metrics;
     root.querySelector('#report-total').textContent = `${metrics.total} avaliação(ões)`;
-    root.querySelector('#report-metrics').innerHTML = `<div class="metric-card metric-card--blue"><div class="metric-card__top"><span class="metric-card__icon" aria-hidden="true">${dashboardIcon('chart')}</span><span>Avaliações</span></div><strong>${metrics.total}</strong><small>No período</small></div><div class="metric-card metric-card--green"><div class="metric-card__top"><span class="metric-card__icon" aria-hidden="true">${dashboardIcon('heart')}</span><span>Satisfação</span></div><strong>${Number(metrics.satisfiedRate || 0).toLocaleString('pt-BR')}%</strong><small>Clientes satisfeitos</small></div><div class="metric-card metric-card--purple"><div class="metric-card__top"><span class="metric-card__icon" aria-hidden="true">${dashboardIcon('star')}</span><span>Nota média</span></div><strong>${metrics.averageScore === null ? '—' : Number(metrics.averageScore).toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}</strong><small>De 1 a 5</small></div><div class="metric-card metric-card--orange"><div class="metric-card__top"><span class="metric-card__icon" aria-hidden="true">${dashboardIcon('alert')}</span><span>Insatisfação</span></div><strong>${Number(metrics.dissatisfiedRate || 0).toLocaleString('pt-BR')}%</strong><small>Clientes insatisfeitos</small></div>`;
+    root.querySelector('#report-metrics').innerHTML = `<div class="metric-card metric-card--blue"><div class="metric-card__top"><span class="metric-card__icon" aria-hidden="true">${dashboardIcon('evaluations')}</span><span>Avaliações</span></div><strong>${metrics.total}</strong><small>No período</small></div><div class="metric-card metric-card--green"><div class="metric-card__top"><span class="metric-card__icon" aria-hidden="true">${dashboardIcon('satisfaction')}</span><span>Satisfação</span></div><strong>${Number(metrics.satisfiedRate || 0).toLocaleString('pt-BR')}%</strong><small>Clientes satisfeitos</small></div><div class="metric-card metric-card--purple"><div class="metric-card__top"><span class="metric-card__icon" aria-hidden="true">${dashboardIcon('rating')}</span><span>Nota média</span></div><strong>${metrics.averageScore === null ? '—' : Number(metrics.averageScore).toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}</strong><small>De 1 a 5</small></div><div class="metric-card metric-card--orange"><div class="metric-card__top"><span class="metric-card__icon" aria-hidden="true">${dashboardIcon('dissatisfaction')}</span><span>Insatisfação</span></div><strong>${Number(metrics.dissatisfiedRate || 0).toLocaleString('pt-BR')}%</strong><small>Clientes insatisfeitos</small></div>`;
     root.querySelector('#report-distribution').innerHTML = report.distribution?.length
-      ? report.distribution.map((item) => `<div class="distribution-row"><span class="distribution-label">${item.emoji} ${escapeHtml(item.label)}</span><span class="distribution-bar"><i style="width:${metrics.total ? Math.min(100, (item.count / metrics.total) * 100) : 0}%"></i></span><strong>${item.count}</strong></div>`).join('')
+      ? report.distribution.map((item) => `<div class="distribution-row"><span class="distribution-label"><span class="distribution-emoji" aria-hidden="true">${escapeHtml(item.emoji)}</span><span>${escapeHtml(item.label)}</span></span><span class="distribution-bar"><i style="width:${metrics.total ? Math.min(100, (item.count / metrics.total) * 100) : 0}%"></i></span><strong>${item.count}</strong></div>`).join('')
       : '<p class="empty-state">Sem distribuição no período.</p>';
     root.querySelector('#report-list').innerHTML = report.rows?.length
       ? report.rows.slice(0, 30).map((row) => `<div class="report-row"><span class="report-row__dot" aria-hidden="true"></span><div><strong>${escapeHtml(row.survey_title)}</strong><small>${escapeHtml(row.location_name || row.device_name || 'Tablet')} · ${escapeHtml(row.day)}</small></div><b>${row.total}</b></div>`).join('')
@@ -330,41 +547,79 @@ async function renderDashboard(root, user) {
     });
     root.querySelectorAll('.edit-device').forEach((button) => {
       button.onclick = async () => {
-        const name = prompt('Nome do tablet', button.dataset.name);
-        if (name === null) return;
-        const locationName = prompt('Unidade / local', button.dataset.location || 'Recepção');
-        if (locationName === null) return;
-        await api(`/api/devices/${button.dataset.device}`, { method: 'PATCH', body: JSON.stringify({ name, locationName }) });
-        await loadDashboardData();
+        const values = await openDialog({
+          title: 'Editar tablet',
+          description: 'Atualize a identificação e o local de operação.',
+          fields: [
+            { name: 'name', label: 'Nome do tablet', value: button.dataset.name },
+            { name: 'locationName', label: 'Unidade / local', value: button.dataset.location || 'Recepção' },
+          ],
+        });
+        if (!values) return;
+        button.disabled = true;
+        try {
+          await api(`/api/devices/${button.dataset.device}`, { method: 'PATCH', body: JSON.stringify(values) });
+          await loadDashboardData();
+        } finally { button.disabled = false; }
       };
     });
     root.querySelectorAll('.unpair-device').forEach((button) => {
-      button.onclick = async () => { if (!confirm('Desparear este tablet? A pesquisa ativa será removida.')) return; await api(`/api/devices/${button.dataset.device}/unpair`, { method: 'POST' }); await loadDashboardData(); };
+      button.onclick = async () => {
+        if (!await confirmAction('Desparear tablet?', 'A pesquisa ativa será removida do dispositivo.')) return;
+        button.disabled = true;
+        const status = root.querySelector('#dashboard-status');
+        try {
+          await api(`/api/devices/${button.dataset.device}/unpair`, { method: 'POST' });
+          await loadDashboardData();
+          if (status) { status.innerHTML = '<i></i>Tablet despareado'; status.classList.remove('sync-status--error'); }
+        } catch (error) {
+          if (status) { status.innerHTML = `<i></i>${escapeHtml(error.message)}`; status.classList.add('sync-status--error'); }
+        } finally { button.disabled = false; }
+      };
     });
     root.querySelectorAll('.deactivate-device').forEach((button) => {
-      button.onclick = async () => { if (!confirm('Desativar este tablet?')) return; await api(`/api/devices/${button.dataset.device}`, { method: 'DELETE' }); await loadDashboardData(); };
+      button.onclick = async () => {
+        if (!await confirmAction('Desativar tablet?', 'O dispositivo deixará de receber pesquisas até ser ativado novamente.')) return;
+        button.disabled = true;
+        try { await api(`/api/devices/${button.dataset.device}`, { method: 'DELETE' }); await loadDashboardData(); }
+        finally { button.disabled = false; }
+      };
     });
     root.querySelectorAll('.edit-survey').forEach((button) => {
       button.onclick = async () => {
         const survey = await api(`/api/surveys/${button.dataset.survey}`);
         const question = survey.questions?.[0];
-        const title = prompt('Título da pesquisa', survey.title);
-        if (title === null) return;
-        const questionText = prompt('Pergunta', question?.text || survey.description || '');
-        if (questionText === null) return;
-        const responseType = prompt('Tipo de resposta: emoji, stars, scale ou options', question?.type || 'emoji');
-        if (responseType === null) return;
-        const nextType = responseType.trim().toLowerCase();
-        if (!['emoji', 'stars', 'scale', 'options'].includes(nextType)) { alert('Tipo inválido. Use emoji, stars, scale ou options.'); return; }
-        const options = nextType === 'options' ? prompt('Opções separadas por vírgula', (question?.options || []).join(', ')) : null;
-        if (nextType === 'options' && options === null) return;
-        const nextQuestion = { text: questionText, type: nextType, options: nextType === 'options' ? options.split(',').map((item) => item.trim()).filter(Boolean) : [] };
-        await api(`/api/surveys/${survey.id}`, { method: 'PATCH', body: JSON.stringify({ title, description: questionText, questions: [nextQuestion] }) });
-        await loadDashboardData();
+        const values = await openDialog({
+          title: 'Editar pesquisa',
+          description: 'Altere o texto e o tipo de resposta exibidos no tablet.',
+          fields: [
+            { name: 'title', label: 'Título da pesquisa', value: survey.title },
+            { name: 'questionText', label: 'Pergunta para o cliente', value: question?.text || survey.description || '' },
+            { name: 'type', label: 'Tipo de resposta', value: question?.type || 'emoji', type: 'select', options: [
+              { value: 'emoji', label: 'Carinhas animadas' },
+              { value: 'stars', label: 'Estrelas (1 a 5)' },
+              { value: 'scale', label: 'Nota de 1 a 10' },
+              { value: 'options', label: 'Opções personalizadas' },
+            ] },
+            { name: 'emoji-config', label: 'Personalizar carinhas animadas', value: normalizeEmojiOptions(question?.options), type: 'emoji-config' },
+            { name: 'options', label: 'Opções separadas por vírgula', value: (question?.options || []).join(', '), required: false },
+          ],
+        });
+        if (!values) return;
+        const nextQuestion = { text: values.questionText, type: values.type, options: values.type === 'emoji' ? readEmojiOptions(values, 'emoji-config') : values.type === 'options' ? values.options.split(',').map((item) => item.trim()).filter(Boolean) : [] };
+        button.disabled = true;
+        try {
+          await api(`/api/surveys/${survey.id}`, { method: 'PATCH', body: JSON.stringify({ title: values.title, description: values.questionText, questions: [nextQuestion] }) });
+          await loadDashboardData();
+        } finally { button.disabled = false; }
       };
     });
     root.querySelectorAll('.toggle-survey').forEach((button) => {
-      button.onclick = async () => { await api(`/api/surveys/${button.dataset.survey}`, { method: 'PATCH', body: JSON.stringify({ published: button.dataset.published !== 'true' }) }); await loadDashboardData(); };
+      button.onclick = async () => {
+        button.disabled = true;
+        try { await api(`/api/surveys/${button.dataset.survey}`, { method: 'PATCH', body: JSON.stringify({ published: button.dataset.published !== 'true' }) }); await loadDashboardData(); }
+        finally { button.disabled = false; }
+      };
     });
     for (const id of ['report-survey', 'report-location', 'report-device']) root.querySelector(`#${id}`).onchange = loadDashboardData;
   }

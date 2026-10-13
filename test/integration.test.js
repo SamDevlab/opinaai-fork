@@ -14,6 +14,7 @@ const databaseUrl = process.env.TEST_DATABASE_URL || process.env.DATABASE_URL ||
 const pool = new Pool({ connectionString: databaseUrl });
 let server;
 let tenantNames;
+let databaseReady = false;
 
 function sleep(ms) { return new Promise((resolve) => setTimeout(resolve, ms)); }
 
@@ -50,6 +51,10 @@ async function waitForServer() {
 }
 
 before(async () => {
+  try {
+    await pool.query('SELECT 1');
+    databaseReady = true;
+  } catch { return; }
   tenantNames = [`Tenant A ${tag}`, `Tenant B ${tag}`];
   server = spawn(process.execPath, ['server/index.js'], {
     cwd: process.cwd(),
@@ -76,12 +81,20 @@ before(async () => {
 });
 
 after(async () => {
+  if (!databaseReady) {
+    await pool.end();
+    return;
+  }
   if (tenantNames?.length) await pool.query('DELETE FROM tenants WHERE name = ANY($1)', [tenantNames]);
   await pool.end();
   if (server && !server.killed) server.kill();
 });
 
-test('integra autenticação, isolamento, pareamento, respostas e relatório', async () => {
+test('integra autenticação, isolamento, pareamento, respostas e relatório', async (context) => {
+  if (!databaseReady) {
+    context.skip('PostgreSQL local indisponível; a integração roda no CI com o serviço de banco ativo.');
+    return;
+  }
   const superToken = await login(adminEmail, adminPassword);
   const invalidLogin = await api('/api/auth/login', { method: 'POST', body: JSON.stringify({ email: adminEmail, password: 'senha-incorreta' }) });
   assert.equal(invalidLogin.response.status, 401);
@@ -102,8 +115,15 @@ test('integra autenticação, isolamento, pareamento, respostas e relatório', a
   const tenantB = tenantBResult.body.tenant.id;
   const adminAEmail = tenantAResult.body.user.email;
   const adminBEmail = tenantBResult.body.user.email;
-  const adminAToken = await login(adminAEmail, tenantAPassword);
+  let adminAToken = await login(adminAEmail, tenantAPassword);
   const adminBToken = await login(adminBEmail, tenantBPassword);
+  const rotatedPassword = `${tenantAPassword}-rotated`;
+  const changePassword = await api('/api/auth/change-password', {
+    method: 'POST', token: adminAToken,
+    body: JSON.stringify({ currentPassword: tenantAPassword, newPassword: rotatedPassword }),
+  });
+  assert.equal(changePassword.response.status, 200, JSON.stringify(changePassword.body));
+  adminAToken = await login(adminAEmail, rotatedPassword);
 
   const surveyAResult = await api('/api/surveys', {
     method: 'POST', token: superToken,
@@ -229,4 +249,32 @@ test('integra autenticação, isolamento, pareamento, respostas e relatório', a
   assert.equal(crossPatch.response.status, 403);
   const crossSurvey = await api(`/api/surveys/${surveyA.id}`, { token: adminBToken });
   assert.equal(crossSurvey.response.status, 403);
+
+  const adminUnpair = await api(`/api/devices/${deviceA}/unpair`, { method: 'POST', token: adminAToken });
+  assert.equal(adminUnpair.response.status, 200, JSON.stringify(adminUnpair.body));
+  assert.equal(adminUnpair.body.status, 'unpaired');
+  const unpairedConfig = await api(`/api/devices/config?deviceId=${encodeURIComponent(deviceAId)}&currentConfigVersion=${adminUnpair.body.configVersion}`, { headers: { Authorization: `Bearer ${deviceASecret}` } });
+  assert.equal(unpairedConfig.response.status, 200, JSON.stringify(unpairedConfig.body));
+  assert.equal(unpairedConfig.body.status, 'unpaired');
+  const tabletUnpair = await api('/api/devices/self/unpair', { method: 'POST', headers: { Authorization: `Bearer ${deviceASecret}` }, body: JSON.stringify({ deviceId: deviceAId }) });
+  assert.equal(tabletUnpair.response.status, 200, JSON.stringify(tabletUnpair.body));
+  assert.equal(tabletUnpair.body.status, 'unpaired');
+});
+
+test('rate limit separa clientes encaminhados pelo proxy confiável', async () => {
+  const suffix = Number.parseInt(tag.slice(0, 2), 16) % 254 + 1;
+  const firstIp = `198.51.100.${suffix}`;
+  const secondIp = `203.0.113.${suffix}`;
+  const invalidLogin = (ip) => api('/api/auth/login', {
+    method: 'POST',
+    headers: { 'X-Forwarded-For': ip },
+    body: JSON.stringify({ email: `missing-${tag}@opina.test`, password: 'invalid' }),
+  });
+
+  for (let attempt = 0; attempt < 10; attempt += 1) {
+    const { response } = await invalidLogin(firstIp);
+    assert.equal(response.status, 401);
+  }
+  assert.equal((await invalidLogin(firstIp)).response.status, 429);
+  assert.equal((await invalidLogin(secondIp)).response.status, 401);
 });

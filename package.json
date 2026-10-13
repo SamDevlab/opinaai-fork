@@ -10,14 +10,15 @@
     "build": "vite build",
     "preview": "vite preview --host 0.0.0.0",
     "check": "node --check server/index.js && node --check src/main.js && node --check src/tablet.js",
-    "test": "node --test test/integration.test.js",
+    "test": "node --test",
+    "test:integration": "node --test test/integration.test.js",
     "android:sync": "npm run build && npx cap sync android",
     "android:build": "npm run android:sync && android\\gradlew.bat --project-dir android --no-daemon assembleDebug",
+    "android:release": "node scripts/build-android-release.mjs",
     "android:install": "npm run android:build && adb install -r android\\app\\build\\outputs\\apk\\debug\\app-debug.apk"
   },
   "dependencies": {
     "@capacitor/android": "^8.5.2",
-    "@capacitor/cli": "^8.5.2",
     "@capacitor/core": "^8.5.2",
     "bcryptjs": "^2.4.3",
     "cors": "^2.8.5",
@@ -29,6 +30,7 @@
     "pg": "^8.13.1"
   },
   "devDependencies": {
+    "@capacitor/cli": "^8.5.2",
     "concurrently": "^9.1.2",
     "typescript": "^7.0.2",
     "vite": "^6.4.3"

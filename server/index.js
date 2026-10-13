@@ -13,6 +13,7 @@ import { readdir, readFile } from 'node:fs/promises';
 
 const { Pool } = pg;
 const app = express();
+app.set('trust proxy', 1);
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const migrationsDir = path.join(__dirname, 'migrations');
 const pool = new Pool({
@@ -21,12 +22,24 @@ const pool = new Pool({
 
 const jwtSecret = process.env.JWT_SECRET || (process.env.NODE_ENV === 'production' ? null : 'dev-only-change-me');
 if (!jwtSecret) throw new Error('JWT_SECRET é obrigatória em produção.');
+const DEFAULT_RATING_QUESTION = 'Como foi a sua experiência?';
+const DEFAULT_EMOJI_OPTIONS = [
+  { value: '1', emoji: '😡', label: 'Péssimo', animation: 'shake' },
+  { value: '2', emoji: '😕', label: 'Ruim', animation: 'float' },
+  { value: '3', emoji: '😐', label: 'Regular', animation: 'pulse' },
+  { value: '4', emoji: '🙂', label: 'Bom', animation: 'bounce' },
+  { value: '5', emoji: '😍', label: 'Ótimo', animation: 'heart' },
+];
+const ALLOWED_EMOJI_ANIMATIONS = new Set(['shake', 'float', 'pulse', 'bounce', 'heart']);
+const allowedCorsOrigins = new Set(
+  String(process.env.CORS_ORIGINS || '').split(',').map((origin) => origin.trim()).filter(Boolean),
+);
 
 app.disable('x-powered-by');
 app.use(helmet());
 app.use(cors({
   origin(origin, callback) {
-    if (!origin || origin === 'capacitor://localhost' || /^https?:\/\/localhost(?::\d+)?$/.test(origin)) {
+    if (!origin || allowedCorsOrigins.has(origin) || origin === 'capacitor://localhost' || /^https?:\/\/localhost(?::\d+)?$/.test(origin)) {
       callback(null, true);
       return;
     }
@@ -93,7 +106,9 @@ function canAccessTenant(req, tenantId) {
 function parseDateFilter(value) {
   if (!value) return null;
   const parsed = String(value).trim();
-  return /^\d{4}-\d{2}-\d{2}$/.test(parsed) ? parsed : null;
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(parsed)) return null;
+  const date = new Date(`${parsed}T00:00:00.000Z`);
+  return Number.isNaN(date.getTime()) || date.toISOString().slice(0, 10) !== parsed ? null : parsed;
 }
 
 function emptyReportMetrics() {
@@ -119,18 +134,39 @@ function emptyDistribution() {
   ].map(([value, emoji, label]) => ({ value, emoji, label, count: 0 }));
 }
 
+function normalizeEmojiOptions(input) {
+  const source = Array.isArray(input) ? input : [];
+  return DEFAULT_EMOJI_OPTIONS.map((fallback, index) => {
+    const item = source[index];
+    if (typeof item === 'string') {
+      return { ...fallback, emoji: cleanText(item, 16) || fallback.emoji };
+    }
+    return {
+      value: String(index + 1),
+      emoji: cleanText(item?.emoji, 16) || fallback.emoji,
+      label: cleanText(item?.label, 80) || fallback.label,
+      animation: ALLOWED_EMOJI_ANIMATIONS.has(item?.animation) ? item.animation : fallback.animation,
+    };
+  });
+}
+
 function normalizeQuestions(input) {
   const questions = Array.isArray(input) ? input.slice(0, 20) : [];
   const allowedTypes = new Set(['emoji', 'stars', 'scale', 'options']);
-  const normalized = questions.map((question, index) => ({
-    id: asPositiveInt(question?.id),
-    text: cleanText(question?.text, 500),
-    type: allowedTypes.has(question?.type) ? question.type : 'emoji',
-    position: index,
-    options: Array.isArray(question?.options)
-      ? question.options.map((item) => cleanText(item, 120)).filter(Boolean).slice(0, 12)
-      : [],
-  }));
+  const normalized = questions.map((question, index) => {
+    const type = allowedTypes.has(question?.type) ? question.type : 'emoji';
+    return {
+      id: asPositiveInt(question?.id),
+      text: cleanText(question?.text, 500) || (['emoji', 'stars'].includes(type) ? DEFAULT_RATING_QUESTION : ''),
+      type,
+      position: index,
+      options: type === 'emoji'
+        ? normalizeEmojiOptions(question?.options)
+        : Array.isArray(question?.options)
+          ? question.options.map((item) => cleanText(item, 120)).filter(Boolean).slice(0, 12)
+          : [],
+    };
+  });
   if (!normalized.length || normalized.some((question) => !question.text || (question.type === 'options' && question.options.length < 2))) {
     return null;
   }
@@ -261,6 +297,14 @@ function requireSuperadmin(req, res) {
   return true;
 }
 
+function requireManager(req, res) {
+  if (!['SUPERADMIN', 'ADMIN'].includes(req.user.role)) {
+    res.status(403).json({ error: 'Acesso restrito ao administrador.' });
+    return false;
+  }
+  return true;
+}
+
 app.post('/api/auth/login', loginLimiter, asyncRoute(async (req, res) => {
   const email = cleanText(req.body?.email, 180);
   const password = String(req.body?.password || '');
@@ -280,6 +324,20 @@ app.post('/api/auth/login', loginLimiter, asyncRoute(async (req, res) => {
 
 app.get('/api/me', auth, (req, res) => res.json(req.user));
 
+app.post('/api/auth/change-password', auth, asyncRoute(async (req, res) => {
+  const currentPassword = String(req.body?.currentPassword || '');
+  const newPassword = String(req.body?.newPassword || '');
+  if (!currentPassword || newPassword.length < 12) {
+    return res.status(400).json({ error: 'A nova senha precisa ter pelo menos 12 caracteres.' });
+  }
+  const result = await pool.query('SELECT password_hash FROM users WHERE id=$1 AND active=true', [req.user.id]);
+  if (!result.rowCount || !(await bcrypt.compare(currentPassword, result.rows[0].password_hash))) {
+    return res.status(401).json({ error: 'Senha atual inválida.' });
+  }
+  await pool.query('UPDATE users SET password_hash=$1 WHERE id=$2', [await bcrypt.hash(newPassword, 12), req.user.id]);
+  res.json({ ok: true });
+}));
+
 app.get('/api/tenants', auth, async (req, res) => {
   if (!requireSuperadmin(req, res)) return;
   const result = await pool.query('SELECT id,name,created_at FROM tenants ORDER BY name');
@@ -291,8 +349,8 @@ app.post('/api/tenants', auth, asyncRoute(async (req, res) => {
   const name = cleanText(req.body?.name, 160);
   const email = cleanText(req.body?.email, 180);
   const password = String(req.body?.password || '');
-  if (!name || !email || password.length < 8) {
-    return res.status(400).json({ error: 'Informe empresa, e-mail e senha com pelo menos 8 caracteres.' });
+  if (!name || !email || password.length < 12) {
+    return res.status(400).json({ error: 'Informe empresa, e-mail e senha com pelo menos 12 caracteres.' });
   }
 
   const client = await pool.connect();
@@ -343,6 +401,7 @@ app.get('/api/surveys/:id', auth, asyncRoute(async (req, res) => {
 }));
 
 app.post('/api/surveys', auth, async (req, res) => {
+  if (!requireManager(req, res)) return;
   const tenantId = tenantForUser(req, req.body?.tenantId);
   const title = cleanText(req.body?.title, 200);
   const description = cleanText(req.body?.description, 1000);
@@ -375,6 +434,7 @@ app.post('/api/surveys', auth, async (req, res) => {
 });
 
 app.patch('/api/surveys/:id', auth, asyncRoute(async (req, res) => {
+  if (!requireManager(req, res)) return;
   const surveyId = asPositiveInt(req.params.id);
   if (!surveyId) return res.status(400).json({ error: 'Pesquisa inválida.' });
   const existing = await pool.query('SELECT id,tenant_id FROM surveys WHERE id=$1', [surveyId]);
@@ -495,13 +555,16 @@ app.get('/api/reports', auth, asyncRoute(async (req, res) => {
     dissatisfiedCount: Number(row.dissatisfied_count || 0),
     dissatisfiedRate: total ? Number(((Number(row.dissatisfied_count || 0) / total) * 100).toFixed(1)) : 0,
   };
-  const distribution = [
-    ['1', '😡', 'Péssimo', row.very_dissatisfied_count],
-    ['2', '😕', 'Ruim', row.dissatisfied_low_count],
-    ['3', '😐', 'Regular', row.neutral_distribution_count],
-    ['4', '🙂', 'Bom', row.satisfied_low_count],
-    ['5', '😍', 'Ótimo', row.satisfied_high_count],
-  ].map(([value, emoji, label, count]) => ({ value, emoji, label, count: Number(count || 0) }));
+  let distributionOptions = DEFAULT_EMOJI_OPTIONS;
+  if (surveyId) {
+    const configured = await pool.query(
+      'SELECT options FROM questions WHERE survey_id=$1 AND type=$2 ORDER BY position,id LIMIT 1',
+      [surveyId, 'emoji'],
+    );
+    if (configured.rowCount) distributionOptions = normalizeEmojiOptions(configured.rows[0].options);
+  }
+  const counts = [row.very_dissatisfied_count, row.dissatisfied_low_count, row.neutral_distribution_count, row.satisfied_low_count, row.satisfied_high_count];
+  const distribution = distributionOptions.map((option, index) => ({ ...option, count: Number(counts[index] || 0) }));
   res.json({ filters: { tenantId, from, to, surveyId, locationId, deviceId }, metrics, distribution, rows: rows.rows });
 }));
 
@@ -551,6 +614,7 @@ app.post('/api/devices/register', pairingLimiter, asyncRoute(async (req, res) =>
 }));
 
 app.post('/api/devices/pair', pairingLimiter, auth, asyncRoute(async (req, res) => {
+  if (!requireManager(req, res)) return;
   const activationCode = cleanText(req.body?.activationCode, 6);
   const tenantId = tenantForUser(req, req.body?.tenantId);
   const locationName = cleanText(req.body?.locationName || 'Recepção', 160);
@@ -640,6 +704,7 @@ async function loadManagedDevice(req, res, deviceId) {
 }
 
 app.patch('/api/devices/:id', auth, asyncRoute(async (req, res) => {
+  if (!requireManager(req, res)) return;
   const deviceId = asPositiveInt(req.params.id);
   if (!deviceId) return res.status(400).json({ error: 'Tablet inválido.' });
   const device = await loadManagedDevice(req, res, deviceId);
@@ -680,6 +745,7 @@ app.patch('/api/devices/:id', auth, asyncRoute(async (req, res) => {
 }));
 
 app.post('/api/devices/:id/refresh-config', auth, asyncRoute(async (req, res) => {
+  if (!requireManager(req, res)) return;
   const deviceId = asPositiveInt(req.params.id);
   const device = await loadManagedDevice(req, res, deviceId);
   if (!device) return;
@@ -691,6 +757,7 @@ app.post('/api/devices/:id/refresh-config', auth, asyncRoute(async (req, res) =>
 }));
 
 app.post('/api/devices/:id/remove-survey', auth, asyncRoute(async (req, res) => {
+  if (!requireManager(req, res)) return;
   const deviceId = asPositiveInt(req.params.id);
   const device = await loadManagedDevice(req, res, deviceId);
   if (!device) return;
@@ -698,21 +765,38 @@ app.post('/api/devices/:id/remove-survey', auth, asyncRoute(async (req, res) => 
   res.json({ ok: true });
 }));
 
-app.post('/api/devices/:id/unpair', auth, asyncRoute(async (req, res) => {
-  const deviceId = asPositiveInt(req.params.id);
-  const device = await loadManagedDevice(req, res, deviceId);
-  if (!device) return;
-  await pool.query(
+app.post('/api/devices/self/unpair', deviceAuth, asyncRoute(async (req, res) => {
+  const result = await pool.query(
     `UPDATE devices
         SET tenant_id=NULL,location_id=NULL,active_survey_id=NULL,activation_code=NULL,
             activation_expires_at=NULL,paired_at=NULL,status='unknown',config_version=config_version+1,updated_at=now()
-      WHERE id=$1`,
+      WHERE id=$1 AND active=true
+      RETURNING id,config_version`,
+    [req.device.id],
+  );
+  if (!result.rowCount) return res.status(404).json({ error: 'device_not_found' });
+  res.json({ ok: true, status: 'unpaired', deviceId: req.device.device_id, configVersion: result.rows[0].config_version });
+}));
+
+app.post('/api/devices/:id/unpair', auth, asyncRoute(async (req, res) => {
+  if (!requireManager(req, res)) return;
+  const deviceId = asPositiveInt(req.params.id);
+  const device = await loadManagedDevice(req, res, deviceId);
+  if (!device) return;
+  const result = await pool.query(
+    `UPDATE devices
+        SET tenant_id=NULL,location_id=NULL,active_survey_id=NULL,activation_code=NULL,
+            activation_expires_at=NULL,paired_at=NULL,status='unknown',config_version=config_version+1,updated_at=now()
+      WHERE id=$1 AND tenant_id IS NOT NULL
+      RETURNING id,config_version`,
     [deviceId],
   );
-  res.json({ ok: true });
+  if (!result.rowCount) return res.status(409).json({ error: 'device_already_unpaired' });
+  res.json({ ok: true, status: 'unpaired', deviceId, configVersion: result.rows[0].config_version });
 }));
 
 app.delete('/api/devices/:id', auth, asyncRoute(async (req, res) => {
+  if (!requireManager(req, res)) return;
   const deviceId = asPositiveInt(req.params.id);
   const device = await loadManagedDevice(req, res, deviceId);
   if (!device) return;
@@ -721,6 +805,7 @@ app.delete('/api/devices/:id', auth, asyncRoute(async (req, res) => {
 }));
 
 app.post('/api/devices/:id/assign-survey', auth, async (req, res) => {
+  if (!requireManager(req, res)) return;
   const deviceId = asPositiveInt(req.params.id);
   const surveyId = asPositiveInt(req.body?.surveyId);
   if (!deviceId || !surveyId) return res.status(400).json({ error: 'Tablet e pesquisa são obrigatórios.' });
@@ -773,10 +858,10 @@ app.post('/api/devices/heartbeat', deviceAuth, asyncRoute(async (req, res) => {
 app.get('/api/devices/config', deviceAuth, asyncRoute(async (req, res) => {
   await pool.query("UPDATE devices SET status='online',last_seen_at=now(),updated_at=now() WHERE id=$1 AND active=true", [req.device.id]);
   const currentConfigVersion = asPositiveInt(req.query.currentConfigVersion);
+  if (!req.device.tenant_id) return res.json({ status: 'unpaired', deviceId: req.device.device_id, configVersion: req.device.config_version, survey: null });
   if (currentConfigVersion && currentConfigVersion === req.device.config_version) {
     return res.json({ status: 'unchanged', deviceId: req.device.device_id, configVersion: req.device.config_version });
   }
-  if (!req.device.tenant_id) return res.json({ status: 'unpaired', deviceId: req.device.device_id, configVersion: req.device.config_version, survey: null });
   if (!req.device.active_survey_id) {
     return res.json({ status: 'paired', deviceId: req.device.device_id, deviceName: req.device.name, configVersion: req.device.config_version, survey: null });
   }
@@ -807,6 +892,7 @@ app.post('/api/devices/responses', deviceAuth, async (req, res) => {
     return res.status(400).json({ error: 'invalid_response' });
   }
   if (!req.device.tenant_id) return res.status(409).json({ error: 'device_not_paired' });
+  if (cleanText(req.body?.deviceId, 80) !== req.device.device_id) return res.status(400).json({ error: 'invalid_device' });
   if (!req.device.active_survey_id || req.device.active_survey_id !== surveyId) {
     return res.status(409).json({ error: 'survey_not_assigned_to_device' });
   }
